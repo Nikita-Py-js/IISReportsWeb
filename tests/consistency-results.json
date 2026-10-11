@@ -1,0 +1,151 @@
+{
+  "suite": "portable source/package consistency (not compilation)",
+  "passed": 36,
+  "total": 36,
+  "tests": [
+    {
+      "test": "release version",
+      "status": "PASS"
+    },
+    {
+      "test": "standalone source matches Program.cs",
+      "status": "PASS"
+    },
+    {
+      "test": "standalone source matches V3Core.cs",
+      "status": "PASS"
+    },
+    {
+      "test": "standalone source matches V3Import.cs",
+      "status": "PASS"
+    },
+    {
+      "test": "standalone source matches V3Monitoring.cs",
+      "status": "PASS"
+    },
+    {
+      "test": "XML web/Web.config.example",
+      "status": "PASS"
+    },
+    {
+      "test": "XML agent/IISReports.Agent.exe.config.example",
+      "status": "PASS"
+    },
+    {
+      "test": "XML agent/IISReports.Agent.csproj",
+      "status": "PASS"
+    },
+    {
+      "test": "default document explicitly enabled",
+      "status": "PASS"
+    },
+    {
+      "test": "directory listing disabled",
+      "status": "PASS"
+    },
+    {
+      "test": "Windows mode default",
+      "status": "PASS"
+    },
+    {
+      "test": "no runtime production Web.config in sources",
+      "status": "PASS"
+    },
+    {
+      "test": "schema contains eighteen unique tables",
+      "status": "PASS"
+    },
+    {
+      "test": "requests created before indexes",
+      "status": "PASS"
+    },
+    {
+      "test": "no hardcoded new log sources",
+      "status": "PASS"
+    },
+    {
+      "test": "schema transaction rolls back on failure",
+      "status": "PASS"
+    },
+    {
+      "test": "escaped SQL default new",
+      "status": "PASS"
+    },
+    {
+      "test": "escaped SQL default queued",
+      "status": "PASS"
+    },
+    {
+      "test": "escaped SQL default open",
+      "status": "PASS"
+    },
+    {
+      "test": "escaped SQL default pending",
+      "status": "PASS"
+    },
+    {
+      "test": "schema no destructive data operations",
+      "status": "PASS"
+    },
+    {
+      "test": "explicit datetime2 scale 7",
+      "status": "PASS"
+    },
+    {
+      "test": "security guard present csrf_origin",
+      "status": "PASS"
+    },
+    {
+      "test": "security guard present csrf_missing",
+      "status": "PASS"
+    },
+    {
+      "test": "security guard present csrf_invalid",
+      "status": "PASS"
+    },
+    {
+      "test": "security guard present csrf_expired",
+      "status": "PASS"
+    },
+    {
+      "test": "security guard present MachineKey.Protect",
+      "status": "PASS"
+    },
+    {
+      "test": "security guard present MachineKey.Unprotect",
+      "status": "PASS"
+    },
+    {
+      "test": "security guard present SameSiteMode.Strict",
+      "status": "PASS"
+    },
+    {
+      "test": "isolated HTTP requests",
+      "status": "PASS"
+    },
+    {
+      "test": "negative CSRF assertions kept",
+      "status": "PASS"
+    },
+    {
+      "test": "origin backup outside web root",
+      "status": "PASS"
+    },
+    {
+      "test": "clean config independent of previous install",
+      "status": "PASS"
+    },
+    {
+      "test": "all relative Markdown links resolve",
+      "status": "PASS"
+    },
+    {
+      "test": "no assignment to selected readonly PowerShell automatic variables",
+      "status": "PASS"
+    },
+    {
+      "test": "no previous server-specific names/paths in public sources/docs",
+      "status": "PASS"
+    }
+  ]
+}

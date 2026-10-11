@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IIS Reports v3.0.2</title>
+<style>
+  :root{--bg:#f5f7fa;--card:#fff;--text:#1f2937;--muted:#6b7280;--ok:#059669;
+        --warn:#d97706;--err:#dc2626;--blue:#3b82f6;--violet:#6366f1;--border:#eef1f5}
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);
+       color:var(--text);margin:0;padding:24px;font-size:14px}
+  h1{margin:0 0 6px;font-size:22px;display:flex;align-items:center;gap:10px}
+  .health-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#9ca3af}
+  .health-dot.ok{background:var(--ok);box-shadow:0 0 6px rgba(5,150,105,.6)}
+  .health-dot.warn{background:var(--warn);box-shadow:0 0 6px rgba(217,119,6,.6)}
+  .health-dot.stale{background:var(--err);box-shadow:0 0 6px rgba(220,38,38,.6)}
+  .subtitle{color:var(--muted);margin-bottom:16px;font-size:13px}
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
+  button{background:#111827;color:#fff;border:0;border-radius:8px;padding:8px 14px;
+         cursor:pointer;font-size:13px}
+  button.ghost{background:#e5e7eb;color:#111827}
+  button:hover{opacity:.9}
+  input,select{background:#fff;border:1px solid var(--border);border-radius:8px;
+               padding:8px 10px;font-size:13px;font-family:inherit}
+  select{min-width:220px}
+  .toolbar label{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px}
+  .tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+  .tabs button{background:#e5e7eb;color:#111827;padding:8px 14px}
+  .tabs button.active{background:#111827;color:#fff}
+  .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+            gap:12px;margin-bottom:16px}
+  .kpi{background:var(--card);border-radius:10px;padding:14px 16px;
+       box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .kpi-label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+  .kpi-value{font-size:22px;font-weight:700;margin-top:4px}
+  .kpi-value.ok{color:var(--ok)} .kpi-value.warn{color:var(--warn)}
+  .kpi-value.err{color:var(--err)}
+  section{background:var(--card);border-radius:10px;padding:16px 18px;
+          box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:16px}
+  section h2{margin:0 0 12px;font-size:15px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{background:#f9fafb;color:#374151;font-weight:600;font-size:11px;
+     text-transform:uppercase;letter-spacing:.3px}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr:hover td{background:#f9fafb}
+  .mono{font-family:ui-monospace,Consolas,Menlo,monospace;font-size:12px}
+  .bar{position:relative;background:#eef2f7;border-radius:4px;height:18px;
+       overflow:hidden;min-width:110px}
+  .bar-fill{height:100%}
+  .bar-val{position:absolute;right:6px;top:0;line-height:18px;font-size:11px;
+           color:#374151;font-weight:600}
+  .hourly{display:grid;grid-template-columns:repeat(24,1fr);gap:4px;align-items:end;
+          height:130px;margin-top:6px}
+  .hourly .col{display:flex;flex-direction:column;align-items:center;gap:3px;height:100%}
+  .hourly .bar-v{flex:1;display:flex;align-items:flex-end;width:100%}
+  .hourly .bar-v>div{width:100%;background:var(--blue);border-radius:3px 3px 0 0;min-height:2px}
+  .hourly .lbl{font-size:10px;color:var(--muted)}
+  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+  .badge.ok{background:#d1fae5;color:#065f46}
+  .badge.warn{background:#fef3c7;color:#92400e}
+  .badge.err{background:#fee2e2;color:#991b1b}
+  .badge.site{background:#e0e7ff;color:#3730a3}
+  .badge.cat{background:#f3f4f6;color:#374151}
+  .pager{display:flex;gap:8px;align-items:center;margin-top:12px;justify-content:center}
+  .pager .info{color:var(--muted);font-size:12px}
+  .flex2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:900px){.flex2{grid-template-columns:1fr}}
+  .loading{color:var(--muted);font-size:12px;padding:8px 0}
+  #status-body tr.clickable{cursor:pointer;transition:background .12s}
+  #status-body tr.clickable:hover td{background:#eef2ff}
+  #status-body tr.clickable:hover td:first-child::after{
+    content:" →"; color:var(--violet); font-weight:700}
+  #status-body tr.clickable td:first-child{border-left:3px solid transparent}
+  #status-body tr.clickable:hover td:first-child{border-left-color:var(--violet)}
+  .hint{color:var(--muted);font-size:11px;margin-bottom:10px}
+  .drill{cursor:pointer;border-bottom:1px dashed #cbd5e1}
+  .drill:hover{color:var(--violet);border-bottom-color:var(--violet)}
+  .flag{margin-right:4px}
+
+  /* category chips */
+  .chips{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:20px;
+        background:#eef2f7;color:#374151;cursor:pointer;font-size:12px;font-weight:600;
+        border:1px solid transparent;user-select:none}
+  .chip:hover{background:#dbeafe}
+  .chip.active{background:#111827;color:#fff}
+  .chip.c2.active{background:var(--ok)}
+  .chip.c3.active{background:var(--blue)}
+  .chip.c4.active{background:var(--warn)}
+  .chip.c5.active{background:var(--err)}
+
+  .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+  .plot{border:1px solid #e5e7eb;border-radius:9px;padding:12px;position:relative}
+  .plot canvas{width:100%;height:240px;display:block}
+  .plot-tip{min-height:20px;font-family:Consolas,monospace;font-size:12px;color:#374151}
+  .section-scroll{overflow-x:auto}
+  .small-input{min-width:0;width:100%;font-size:12px;padding:6px 7px}
+  .wide-actions{display:flex;gap:8px;flex-wrap:wrap}
+  .tag{font-size:11px;border-radius:9px;padding:2px 5px;background:#e5e7eb}
+  .tag.ok{color:#047857;background:#d1fae5}.tag.problem{color:#b91c1c;background:#fee2e2}
+  .tag.pending{color:#92400e;background:#fef3c7}
+  /* quick ranges */
+  .quick{display:flex;gap:4px;flex-wrap:wrap}
+  .quick button{background:#eef2f7;color:#374151;padding:6px 10px;font-size:12px;border-radius:16px}
+  .quick button:hover{background:#dbeafe}
+</style>
+<meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="v3.css">
+</head>
+<body>
+
+<h1>IIS Reports v3.0.2 <span id="health" class="health-dot" title="Проверка…"></span></h1>
+<div class="subtitle" id="subtitle">Загрузка…</div>
+
+<pre id="api-error" hidden role="alert" style="white-space:pre-wrap;overflow-wrap:anywhere;padding:14px;border:1px solid var(--err);border-radius:8px"></pre>
+<div class="toolbar">
+  <label>Сайт:
+    <select id="site-select"><option value="0">Все сайты</option></select>
+  </label>
+  <button onclick="refresh()">↻ Обновить данные</button>
+  <button class="ghost" onclick="copyLink()">🔗 Скопировать ссылку</button>
+</div>
+
+<div class="tabs" id="tabs">
+  <button data-tab="overview" class="active">Обзор</button>
+  <button data-tab="clients">Клиенты</button>
+  <button data-tab="users">Пользователи</button>
+  <button data-tab="targets">URL</button>
+  <button data-tab="diagnostics">Диагностика 404/5xx</button>
+  <button data-tab="performance">Нагрузка / RPS</button>
+  <button data-tab="sources">Источники</button>
+  <button data-tab="bots">Боты / ASN</button>
+  <button data-tab="errors5xx">⚠ 5xx по URL</button>
+  <button data-tab="security">🛡️ Безопасность</button>
+  <button data-tab="logs">Детализация логов</button>
+  <button data-tab="alerts">🔔 Алерты</button>
+  <button data-tab="system">Система</button>
+
+  <button data-tab="agent">Сборщик</button>
+  <button data-tab="checks">Проверки сайтов</button>
+  <button data-tab="incidents">Инциденты</button>
+  <button data-tab="queue" class="operator-only">Задания / доставка</button>
+  <button data-tab="access">Windows / CSRF</button>
+</div>
+
+<div id="tab-overview">
+  <div class="kpi-grid" id="kpis"></div>
+  <section>
+    <h2>Распределение запросов по часам (UTC)</h2>
+    <div class="hourly" id="hourly"></div>
+  </section>
+  <div class="flex2">
+    <section>
+      <h2>Коды ответов</h2>
+      <div class="hint">Клик по строке — открыть детализацию с фильтром по этому коду.</div>
+      <table><thead><tr><th>Код</th><th>Категория</th>
+        <th class="num">Запросов</th><th>Доля</th></tr></thead>
+        <tbody id="status-body"></tbody></table>
+    </section>
+    <section>
+      <h2>По дням</h2>
+      <table><thead><tr><th>Дата</th><th class="num">Запросов</th>
+        <th>Доля</th></tr></thead><tbody id="daily-body"></tbody></table>
+    </section>
+  </div>
+</div>
+
+<div id="tab-clients" hidden>
+  <section>
+    <h2>Топ клиентов</h2>
+    <div class="hint">Клик по IP — открыть детализацию по нему.</div>
+    <table><thead><tr><th>IP</th><th>Страна</th><th class="num">Запросов</th>
+      <th>Пользователи</th><th>Основной статус</th>
+      <th>Последняя активность (UTC)</th></tr></thead>
+      <tbody id="clients-body"></tbody></table>
+  </section>
+</div>
+
+<div id="tab-users" hidden>
+  <section>
+    <h2>Топ пользователей</h2>
+    <table><thead><tr><th>Пользователь</th>
+      <th class="num">Запросов</th><th class="num">Уникальных IP</th>
+      <th>Последняя активность (UTC)</th></tr></thead>
+      <tbody id="users-body"></tbody></table>
+  </section>
+</div>
+
+<div id="tab-targets" hidden>
+  <section>
+    <h2>Топ URL</h2>
+    <div class="hint">Клик по URL — открыть детализацию по нему.</div>
+    <table><thead><tr><th>URL</th><th class="num">Запросов</th>
+      <th class="num">Уникальных IP</th>
+      <th class="num">Ошибок 4xx/5xx</th></tr></thead>
+      <tbody id="targets-body"></tbody></table>
+  </section>
+</div>
+
+
+<div id="tab-diagnostics" hidden>
+  <section><h2>HTTP-ошибки: код / подстатус / Win32</h2>
+    <p class="hint">Точная комбинация sc-status.sc-substatus / sc-win32-status из W3C. Сам код не доказывает причину без FREB и серверных журналов.</p>
+    <div class="section-scroll"><table><thead><tr><th>HTTP</th><th>Подстатус</th><th>Win32</th><th>Типовой смысл</th><th class="num">Запросов</th></tr></thead><tbody id="diag-codes"></tbody></table></div>
+  </section>
+  <div class="flex2">
+    <section><h2>Топ 404 URL</h2><div class="section-scroll"><table><thead><tr><th>URL</th><th class="num">404</th><th class="num">IP</th><th class="num">С UA ботов*</th></tr></thead><tbody id="diag-404"></tbody></table></div></section>
+    <section><h2>Топ 5xx URL</h2><div class="section-scroll"><table><thead><tr><th>URL</th><th class="num">5xx</th><th class="num">IP</th><th class="num">Среднее, мс</th></tr></thead><tbody id="diag-5xx"></tbody></table></div></section>
+  </div>
+  <section><h2>Referer при 404</h2><div class="hint">Помогает отличить переходы по битым ссылкам от прямых запросов к несуществующим URL.</div>
+    <div class="section-scroll"><table><thead><tr><th>Referer</th><th class="num">404</th><th class="num">Путей</th></tr></thead><tbody id="diag-referers"></tbody></table></div>
+  </section>
+</div>
+<div id="tab-performance" hidden>
+  <div class="toolbar"><label>Окно: <select id="perf-hours" style="min-width:110px"><option value="1">1 час</option><option value="24" selected>24 часа</option><option value="168">7 дней</option></select></label>
+   <label>Сравнение: <select id="perf-days" style="min-width:130px"><option value="1">Сутки</option><option value="7">7 дней</option><option value="30">30 дней</option></select></label>
+   <button onclick="loadPerformance()">Пересчитать</button></div>
+  <section><h2>Нагрузка: количество запросов по интервалам</h2>
+   <div class="plot"><canvas id="traffic-canvas" height="240"></canvas><div class="plot-tip" id="traffic-tip"></div></div>
+   <div class="hint">Линии: всего (синяя), 4xx (оранжевая), 5xx (красная). Шаг 1 / 5 / 60 минут.</div>
+  </section>
+  <section><h2>Производительность: p95 и среднее время ответа</h2>
+   <div class="plot"><canvas id="latency-canvas" height="240"></canvas><div class="plot-tip" id="latency-tip"></div></div>
+   <div class="metric-grid" id="perf-kpis"></div>
+  </section>
+  <section><h2>RPS / RPM</h2><div class="plot"><canvas id="rates-canvas" height="240"></canvas><div id="rates-tip" class="plot-tip"></div></div><div id="rpm-summary" class="hint"></div></section>
+<section><h2>Сравнение периодов (UTC)</h2><div class="hint" id="compare-range">Равные соседние интервалы до текущего момента.</div>
+   <div class="section-scroll"><table><thead><tr><th>Метрика</th><th>Предыдущий</th><th>Текущий</th><th>Изменение</th></tr></thead><tbody id="compare-body"></tbody></table></div>
+  </section>
+</div>
+<div id="tab-sources" hidden><section><h2>Источники и целостность</h2>
+<div class="hint">Проверка SHA-256 всех зафиксированных блоков запускается кнопкой Verify. Новая версия файла не удаляет старую.</div>
+<button onclick="loadSources()">Обновить</button> <button class="ghost" data-v3-action="parse-errors">Ошибки парсинга</button>
+<div id="sources-summary" class="hint"></div><div id="source-roots"></div><div class="section-scroll"><table><thead><tr><th>Файл</th><th>Версия</th><th>Статус</th><th>Позиция / байт</th><th>Строк / ошибок</th><th>Проверка</th><th>Действия</th></tr></thead><tbody id="sources-body"></tbody></table></div></section></div>
+<div id="tab-bots" hidden>
+  <section><h2>Потенциальные боты и сканеры</h2>
+   <p class="hint">Классификация эвристическая: по User-Agent, 4xx и отказам доступа; не является подтверждением владельца IP. ASN и страна берутся из локальных CSV.</p>
+   <div id="asn-count" class="hint"></div>
+   <div class="section-scroll"><table><thead><tr><th>IP</th><th>Страна</th><th>ASN / организация</th><th>Оценка</th><th class="num">Запросов</th><th class="num">4xx</th><th class="num">401/403</th><th>User-Agent</th></tr></thead><tbody id="bots-body"></tbody></table></div>
+  </section>
+</div>
+
+<div id="tab-errors5xx" hidden>
+  <section>
+    <h2>5xx по URL</h2>
+    <div class="hint">Только запросы с кодом 5xx. Клик по URL — детализация.</div>
+    <table><thead><tr>
+      <th>URL</th>
+      <th>Статусы</th>
+      <th class="num">Запросов</th>
+      <th class="num">Уникальных IP</th>
+      <th>Первое появление</th>
+      <th>Последнее</th>
+    </tr></thead><tbody id="err5xx-body"></tbody></table>
+  </section>
+</div>
+
+<div id="tab-security" hidden>
+  <section>
+    <h2>Топ IP по 4xx (сканеры)</h2>
+    <table><thead><tr><th>IP</th><th>Страна</th><th class="num">Запросов</th>
+      <th>Топ URL</th><th>Последняя активность (UTC)</th></tr></thead>
+      <tbody id="sec-4xx-body"></tbody></table>
+  </section>
+  <section>
+    <h2>Топ IP по 401/403</h2>
+    <table><thead><tr><th>IP</th><th>Страна</th><th class="num">Запросов</th>
+      <th>Топ URL</th><th>Последняя активность (UTC)</th></tr></thead>
+      <tbody id="sec-auth-body"></tbody></table>
+  </section>
+  <section>
+    <h2>Попытки доступа к чувствительным путям</h2>
+    <table><thead><tr><th>Паттерн</th><th class="num">Запросов</th>
+      <th class="num">Уникальных IP</th><th>Топ IP</th>
+      <th>Последняя попытка (UTC)</th></tr></thead>
+      <tbody id="sec-paths-body"></tbody></table>
+  </section>
+  <section>
+    <h2>Подозрительные User-Agent</h2>
+    <table><thead><tr><th>IP</th><th>Страна</th><th class="num">Запросов</th>
+      <th>User-Agent</th><th>Последняя активность (UTC)</th></tr></thead>
+      <tbody id="sec-ua-body"></tbody></table>
+  </section>
+</div>
+
+<div id="tab-logs" hidden>
+  <section>
+    <h2>Детализация логов</h2>
+    <div class="toolbar" style="margin-bottom:10px">
+      <div class="chips" id="cat-chips">
+        <span class="chip c2" data-cat="2">2xx</span>
+        <span class="chip c3" data-cat="3">3xx</span>
+        <span class="chip c4" data-cat="4">4xx</span>
+        <span class="chip c5" data-cat="5">5xx</span>
+        <button class="ghost" onclick="clearCategories()" style="padding:4px 10px;font-size:11px">сбросить</button>
+      </div>
+    </div>
+    <div class="toolbar" style="margin-bottom:10px">
+      <div class="quick">
+        <button onclick="quickRange(1,'hour')">час</button>
+        <button onclick="quickRange(24,'hour')">24 часа</button>
+        <button onclick="quickRange('today')">сегодня</button>
+        <button onclick="quickRange('yesterday')">вчера</button>
+        <button onclick="quickRange(7,'day')">7 дней</button>
+        <button onclick="quickRange('month')">этот месяц</button>
+      </div>
+    </div>
+    <div class="toolbar">
+      <input id="f-client" placeholder="Client IP" style="width:140px">
+      <input id="f-country" placeholder="Страна на странице" title="Page-local filter; not a server-wide country filter" style="width:165px">
+      <input id="f-user"   placeholder="User" style="width:120px">
+      <input id="f-status" placeholder="Status" style="width:80px">
+      <input id="f-method" placeholder="Method" style="width:80px">
+      <input id="f-target" placeholder="URL точно" style="width:200px">
+      <input id="f-search" placeholder="Поиск (URL/UA/Referer)" style="width:200px">
+      <span class="hint">Время UTC:</span>
+      <input id="f-from" type="datetime-local" step="1" title="UTC: from (inclusive)">
+      <input id="f-to" type="datetime-local" step="1" title="UTC: to (exclusive)">
+      <button onclick="applyFilters()">Применить</button>
+      <button class="ghost" onclick="clearFilters()">Сброс</button>
+      <button class="ghost" onclick="exportCsv()">⬇ CSV</button>
+    </div>
+    <div class="loading" id="logs-info"></div>
+    <table><thead><tr><th>Время (UTC)</th><th>Сайт</th><th>IP</th><th>Страна</th>
+      <th>Пользователь</th><th>Метод</th><th>URL</th>
+      <th class="num">Статус</th><th class="num">мс</th>
+      <th>User-Agent</th></tr></thead>
+      <tbody id="logs-body"></tbody></table>
+    <div class="pager">
+      <button class="ghost" onclick="pagePrev()">← Назад</button>
+      <span class="info" id="page-info"></span>
+      <button class="ghost" onclick="pageNext()">Вперёд →</button>
+    </div>
+  </section>
+</div>
+
+<div id="tab-alerts" hidden><section><h2>Правила алертов</h2>
+<div class="hint">Правила хранятся в MSSQL. Оценка по полным минутам UTC, условие: метрика &gt; порог. Результаты открывают инциденты.</div>
+<button data-v3-action="new-rule" class="operator-only">Добавить правило</button> <button class="ghost" onclick="loadAlerts()">Обновить</button>
+<div id="rules-table" class="section-scroll"></div><form id="rule-form" class="v3-form" hidden></form></section></div>
+<div id="tab-system" hidden>
+  <div class="flex2">
+    <section>
+      <h2>HTTP-методы</h2>
+      <table><thead><tr><th>Метод</th><th class="num">Запросов</th></tr></thead>
+        <tbody id="methods-body"></tbody></table>
+    </section>
+    <section>
+      <h2>Типы клиентов (User-Agent)</h2>
+      <table><thead><tr><th>Тип</th><th class="num">Запросов</th>
+        <th>Доля</th></tr></thead><tbody id="ua-body"></tbody></table>
+    </section>
+    <section>
+      <h2>Время ответа (мс)</h2>
+      <table><thead><tr><th>Метрика</th><th class="num">Значение</th></tr></thead>
+        <tbody id="rt-body"></tbody></table>
+      <div class="hourly" id="rt-hist" style="height:120px"></div>
+    </section>
+    <section>
+      <h2>Разбивка по сайтам (W3SVC)</h2>
+      <table><thead><tr><th>Сайт</th><th>ID</th>
+        <th class="num">Запросов</th></tr></thead>
+        <tbody id="sites-body"></tbody></table>
+    </section>
+    <section>
+      <h2>Топ Referer</h2>
+      <table><thead><tr><th>Referer</th><th class="num">Запросов</th></tr></thead>
+        <tbody id="ref-body"></tbody></table>
+    </section>
+    <section>
+      <h2>Самые медленные запросы</h2>
+      <table><thead><tr><th>Время</th><th>Сайт</th><th>IP</th><th>URL</th>
+        <th class="num">Статус</th><th class="num">мс</th></tr></thead>
+        <tbody id="slow-body"></tbody></table>
+    </section>
+  </div>
+  <section style="margin-top:16px">
+    <h2>Медленные URL с персентилями</h2>
+    <table><thead><tr>
+      <th>URL</th><th class="num">Запросов</th><th class="num">Ошибок</th>
+      <th class="num">avg</th><th class="num">p50</th>
+      <th class="num">p95</th><th class="num">p99</th><th class="num">max</th>
+    </tr></thead><tbody id="slow-urls-body"></tbody></table>
+  </section>
+</div>
+
+<div id="tab-agent" hidden><section><h2>Сборщик v3</h2><div class="hint">Windows-служба IISReportsAgentV3. Открытый браузер для работы не нужен.</div><button onclick="loadV3Tab('agent')">Обновить</button><div id="agent-status"></div></section></div><div id="tab-checks" hidden><section><h2>Активные HTTP-проверки</h2><div class="hint">GET, без передачи Windows-паролей. Хосты и порты должны быть разрешены в настройках web и agent.</div><button data-v3-action="new-check" class="operator-only">Добавить</button> <button class="ghost" onclick="loadV3Tab('checks')">Обновить</button><div id="checks-table" class="section-scroll"></div><form id="check-form" class="v3-form" hidden></form></section></div><div id="tab-incidents" hidden><section><h2>Центр инцидентов</h2><div class="hint">open → acknowledged → resolved → closed. Ручное закрытие не означает подтверждённое восстановление.</div><button onclick="loadV3Tab('incidents')">Обновить</button><div id="incidents-table" class="section-scroll"></div></section></div><div id="tab-queue" hidden><section><h2>Задания и уведомления</h2><button onclick="loadV3Tab('queue')">Обновить</button> <button data-v3-action="test-notification">Тест доставки</button><div class="hint">Без webhook в конфиге сборщика сообщения остаются pending. Доставка может повторяться; eventId стабилен.</div><h3>Задания</h3><div id="jobs-table" class="section-scroll"></div><h3>Доставка</h3><div id="outbox-table" class="section-scroll"></div></section></div><div id="tab-access" hidden><section><h2>Windows Authentication / CSRF</h2><button onclick="loadV3Tab('access')">Whoami</button> <button data-v3-action="renew-csrf">Обновить CSRF</button><div class="hint">Учётная запись браузера и пула IIS — разные идентичности. Пароль в эту панель вводить не нужно.</div><pre id="access-info" class="v3-pre"></pre></section></div>
+<dialog id="v3-dialog"><button onclick="this.closest('dialog').close()">Закрыть</button><h2 id="detail-title"></h2><pre id="detail-body" class="v3-pre"></pre></dialog>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => (s ?? '').toString()
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+function parseDate(v) {
+  if (!v) return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  if (typeof v === 'number') { const d = new Date(v); return isNaN(d) ? null : d; }
+  const s = String(v).trim();
+  const m = s.match(/^\/Date\((-?\d+)([+-]\d{4})?\)\/$/);
+  if (m) { const d = new Date(parseInt(m[1], 10)); return isNaN(d.getTime()) ? null : d; }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+const fmt = v => {
+  const d = parseDate(v);
+  if (!d) return '—';
+  return d.toLocaleString('ru-RU', { hour12:false, timeZone:'UTC' });
+};
+
+const statusCatLabel = code => {
+  if (code >= 200 && code < 300) return 'Успех';
+  if (code >= 300 && code < 400) return 'Редирект';
+  if (code >= 400 && code < 500) return 'Ошибка клиента';
+  if (code >= 500 && code < 600) return 'Ошибка сервера';
+  return 'Прочее';
+};
+const rtBucketLabel = key => ({
+  'lt50ms':'<50ms','50-200ms':'50–200ms','200-500ms':'200–500ms',
+  '500ms-1s':'500ms–1s','1-3s':'1–3s','gt3s':'>3s'
+}[key] || key);
+
+function countryFlag(code) {
+  if (!code || code.length !== 2 || code === 'ZZ') return '';
+  const upper = code.toUpperCase();
+  if (!/^[A-Z]{2}$/.test(upper)) return '';
+  try { return String.fromCodePoint(...[...upper].map(c => 0x1F1A5 + c.charCodeAt(0))); }
+  catch (e) { return ''; }
+}
+function countryCell(code) {
+  if (!code) return '<span style="color:var(--muted)">—</span>';
+  return `<span class="flag">${countryFlag(code)}</span>${esc(code)}`;
+}
+
+let logsState = { page: 1, pageSize: 100, total: 0 };
+let logsRequestId = 0;
+let csrfToken = '';
+let accessInfo = { canEdit:false,mode:'local' };
+let sourcesSnapshot = [];
+let selectedCategories = []; // [2,3,4,5]
+
+// ---- URL hash ----
+function getState() {
+  return {
+    site:  $('site-select').value || '0',
+    tab:   document.querySelector('#tabs button.active')?.dataset.tab || 'overview',
+    clientIp:  $('f-client').value.trim(),
+    country:   $('f-country').value.trim(),
+    userName:  $('f-user').value.trim(),
+    status:    $('f-status').value.trim(),
+    method:    $('f-method').value.trim(),
+    targetEq:  $('f-target').value.trim(),
+    search:    $('f-search').value.trim(),
+    from:      $('f-from').value,
+    to:        $('f-to').value,
+    cats:      selectedCategories.join(','),
+    page:      logsState.page,
+    pageSize:  logsState.pageSize,
+    tz: 'utc'
+  };
+}
+function applyStateToHash() {
+  const s = getState();
+  const p = new URLSearchParams();
+  for (const [k,v] of Object.entries(s)) {
+    if (v === '' || v === null || v === undefined) continue;
+    if (k === 'site' && v === '0') continue;
+    if (k === 'tab' && v === 'overview') continue;
+    if (k === 'page' && v === 1) continue;
+    if (k === 'pageSize' && v === 100) continue;
+    p.set(k, v);
+  }
+  const h = p.toString();
+  history.replaceState(null, '', h ? '#' + h : location.pathname + location.search);
+}
+function readStateFromHash() {
+  const raw = location.hash.startsWith('#') ? location.hash.substring(1) : '';
+  if (!raw) return false;
+  const p = new URLSearchParams(raw);
+  const str = k => p.get(k) || '';
+  if (str('site'))     $('site-select').value = str('site');
+  if (str('clientIp')) $('f-client').value = str('clientIp');
+  if (str('country'))  $('f-country').value = str('country');
+  if (str('userName')) $('f-user').value = str('userName');
+  if (str('status'))   $('f-status').value = str('status');
+  if (str('method'))   $('f-method').value = str('method');
+  if (str('targetEq')) $('f-target').value = str('targetEq');
+  if (str('search'))   $('f-search').value = str('search');
+  if (str('from'))     $('f-from').value = str('from');
+  if (str('to'))       $('f-to').value = str('to');
+  if (str('page'))     logsState.page = Math.max(1, parseInt(str('page'), 10) || 1);
+  if (str('pageSize')) logsState.pageSize = Math.max(1, Math.min(500, parseInt(str('pageSize'), 10) || 100));
+  if (str('tz') !== 'utc') {
+    ['f-from', 'f-to'].forEach(id => {
+      if (!$(id).value) return;
+      const old = new Date($(id).value);
+      if (!isNaN(old.getTime())) $(id).value = toLocal(old);
+    });
+  }
+  if (str('cats')) {
+    selectedCategories = str('cats').split(',').map(s => parseInt(s)).filter(x => x >= 1 && x <= 5);
+    renderCategories();
+  }
+  return true;
+}
+
+async function copyLink() {
+  applyStateToHash();
+  try { await navigator.clipboard.writeText(location.href); flash('Ссылка скопирована'); }
+  catch (e) { prompt('Скопируйте ссылку:', location.href); }
+}
+function flash(msg) {
+  const el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#111827;color:#fff;' +
+                     'padding:10px 16px;border-radius:8px;font-size:13px;z-index:999';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2000);
+}
+
+function showError(error) {
+  const panel = $('api-error');
+  panel.hidden = false;
+  panel.textContent = error instanceof Error ? error.message : String(error);
+}
+function clearError() { $('api-error').hidden = true; $('api-error').textContent = ''; }
+function showImportErrors(errors) {
+  if (!errors || !errors.length) return;
+  const max = 5;
+  showError('Ошибки импорта: ' + errors.length + '\n' + errors.slice(0, max).join('\n') +
+    (errors.length > max ? '\n… и ещё ' + (errors.length - max) +
+      '. Полный список: Reports.ashx?action=diag' : ''));
+}
+window.addEventListener('unhandledrejection', event => {
+  showError(event.reason);
+  event.preventDefault();
+});
+
+function switchTab(name) {
+  const allowed = Array.from(document.querySelectorAll('#tabs button')).map(b => b.dataset.tab);
+  if (!allowed.includes(name)) name = 'overview';
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.remove('active'));
+  const target = document.querySelector(`#tabs button[data-tab="${name}"]`);
+  if (target) target.classList.add('active');
+  document.querySelectorAll('[id^="tab-"]').forEach(el => el.hidden = true);
+  const panel = $('tab-' + name);
+  if (panel) panel.hidden = false;
+  if (name === 'logs') loadLogs();
+  if (name === 'security') loadSecurity();
+  if (name === 'alerts') loadAlerts();
+  if (name === 'errors5xx') loadErrors5xx();
+  if (name === 'diagnostics') loadDiagnostics();
+  if (name === 'performance') loadPerformance();
+  if (name === 'sources') loadSources();
+  if (['agent','checks','incidents','queue','access'].includes(name)) loadV3Tab(name);
+  if (name === 'bots') loadBots();
+  applyStateToHash();
+}
+
+document.querySelectorAll('#tabs button').forEach(btn => {
+  btn.onclick = () => switchTab(btn.dataset.tab);
+});
+
+$('site-select').addEventListener('change', () => {
+  logsState.page = 1;
+  $('logs-body').innerHTML = '';
+  applyStateToHash();
+  loadAll();
+});
+
+// ---- Category chips ----
+function renderCategories() {
+  document.querySelectorAll('#cat-chips .chip').forEach(el => {
+    const c = parseInt(el.dataset.cat);
+    el.classList.toggle('active', selectedCategories.includes(c));
+  });
+}
+document.querySelectorAll('#cat-chips .chip').forEach(el => {
+  el.addEventListener('click', () => {
+    const c = parseInt(el.dataset.cat);
+    $('f-status').value = '';
+    const i = selectedCategories.indexOf(c);
+    if (i >= 0) selectedCategories.splice(i, 1);
+    else selectedCategories.push(c);
+    renderCategories();
+    logsState.page = 1;
+    if (!$('tab-logs').hidden) loadLogs();
+    applyStateToHash();
+  });
+});
+function clearCategories() {
+  selectedCategories = [];
+  renderCategories();
+  logsState.page = 1;
+  if (!$('tab-logs').hidden) loadLogs();
+  applyStateToHash();
+}
+
+// ---- Quick ranges ----
+function quickRange(arg1, unit) {
+  const now = new Date();
+  let from = null, to = null;
+  if (arg1 === 'today') {
+    from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    to = now;
+  } else if (arg1 === 'yesterday') {
+    const y = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+    from = y;
+    to = new Date(y.getTime() + 24*3600*1000);
+  } else if (arg1 === 'month') {
+    from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    to = now;
+  } else if (typeof arg1 === 'number' && unit === 'hour') {
+    from = new Date(now.getTime() - arg1 * 3600 * 1000);
+    to = now;
+  } else if (typeof arg1 === 'number' && unit === 'day') {
+    from = new Date(now.getTime() - arg1 * 24 * 3600 * 1000);
+    to = now;
+  }
+  if (from) $('f-from').value = toLocal(from);
+  if (to)   $('f-to').value   = toLocal(to);
+  logsState.page = 1;
+  applyStateToHash();
+  loadLogs();
+}
+// The function name is retained, but all date inputs now explicitly show UTC.
+function toLocal(d) { return d.toISOString().slice(0, 19); }
+function utcInput(id) {
+  const value = $(id).value;
+  const date = new Date(value + 'Z');
+  if (!value || isNaN(date.getTime())) throw new Error('Invalid UTC date: ' + id);
+  return date.toISOString();
+}
+
+// ---- Drill-down ----
+const DRILL_MAP = {
+  clientIp: 'f-client',
+  userName: 'f-user',
+  method:   'f-method',
+  status:   'f-status',
+  targetEq: 'f-target'
+};
+function drillDown(field, value) {
+  if (!value || value === '-' || !DRILL_MAP[field]) return;
+  const source = document.querySelector('#tabs button.active')?.dataset.tab;
+  ['f-client','f-country','f-user','f-status','f-method','f-target','f-search']
+    .forEach(id => $(id).value = '');
+  selectedCategories = source === 'errors5xx' && field !== 'status' ? [5] : [];
+  renderCategories();
+  $(DRILL_MAP[field]).value = value;
+  logsState.page = 1;
+  $('logs-body').innerHTML = '';
+  switchTab('logs');
+}
+
+function ipCell(ip, country) {
+  const cc = country ? countryFlag(country) : '';
+  const ipSafe = esc(ip);
+  return `${cc ? `<span class="flag">${cc}</span>` : ''}` +
+         `<span class="drill mono" data-drill="clientIp" data-val="${ipSafe}">${ipSafe}</span>`;
+}
+function urlCell(target) {
+  const t = esc(target);
+  return `<span class="drill mono" data-drill="targetEq" data-val="${t}" title="${t}">${t}</span>`;
+}
+function userCell(u) {
+  const s = esc(u);
+  if (u === 'Anonymous') return `<span style="color:var(--muted)">${s}</span>`;
+  return `<span class="drill" data-drill="userName" data-val="${s}">${s}</span>`;
+}
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-drill]');
+  if (!el) return;
+  e.preventDefault();
+  drillDown(el.getAttribute('data-drill'), el.getAttribute('data-val'));
+});
+
+// ---- Health ----
+async function loadHealth() {
+  try {
+    const h = await api('health', null, { noSite: true });
+    const dot = $('health');
+    dot.className = 'health-dot ' + (h.status || 'stale');
+    dot.title = (h.databaseError ? h.databaseError + '\n' : '') + `Обновлено: ${fmt(h.lastParsed)} (agent: ${h.agentOnline ? 'online' : 'offline'}, heartbeat ${h.heartbeatAgeSeconds ?? '—'} s)\n` +
+                `Записей в БД: ${h.totalEntries}\n` +
+                `Ошибок: ${(h.errors||[]).length}`;
+  } catch (e) {
+    $('health').className = 'health-dot stale';
+    $('health').title = 'Ошибка: ' + e.message;
+  }
+}
+
+async function loadSites() {
+  const sites = (await api('sites', null, { noSite: true })) || [];
+  const sel = $('site-select');
+  const cur = sel.value || '0';
+  sel.innerHTML = '<option value="0">Все сайты</option>';
+  for (const s of sites) {
+    const opt = document.createElement('option');
+    opt.value = String(s.siteId);
+    opt.textContent = `${s.name} — ${s.requests} запросов`;
+    sel.appendChild(opt);
+  }
+  if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+}
+
+// ---- Overview ----
+async function loadOverview() {
+  const o = await api('overview');
+  if (!o.total) {
+    $('subtitle').textContent = 'Данных нет по выбранному сайту — нажмите «Обновить данные».';
+    $('kpis').innerHTML = ''; $('hourly').innerHTML = '';
+    $('daily-body').innerHTML = ''; $('status-body').innerHTML = '';
+    return;
+  }
+  $('subtitle').innerHTML =
+    `Период: <b>${fmt(o.firstSeen)}</b> — <b>${fmt(o.lastSeen)}</b> (UTC) · ` +
+    `Обновлено: ${fmt(o.lastParsed)} (UTC) · Средний отклик: ${o.avgTimeMs} мс`;
+
+  const kpi = (l, v, c='') =>
+    `<div class="kpi"><div class="kpi-label">${l}</div>
+     <div class="kpi-value ${c}">${v}</div></div>`;
+  $('kpis').innerHTML =
+    kpi('Всего запросов', o.total) +
+    kpi('Уникальных клиентов', o.uniqueIps) +
+    kpi('Аутентиф. пользователей', o.uniqueUsers) +
+    kpi('Уникальных URL', o.uniqueTargets) +
+    kpi('Успешные 2xx', o.status2xx, 'ok') +
+    kpi('Редиректы 3xx', o.status3xx) +
+    kpi('Ошибки 4xx', o.status4xx, 'warn') +
+    kpi('Ошибки 5xx', o.status5xx, 'err');
+
+  const t = await api('timeline');
+  const hours = (t && t.byHour) || [];
+  const days  = (t && t.byDay)  || [];
+  const maxH = Math.max(1, ...hours.map(x => x.count));
+  $('hourly').innerHTML = hours.map(x => {
+    let pct = Math.round(100 * x.count / maxH);
+    if (pct < 2 && x.count > 0) pct = 2;
+    return `<div class="col" title="${x.hour}:00 — ${x.count}">
+      <div class="bar-v"><div style="height:${pct}%"></div></div>
+      <div class="lbl">${x.hour}</div></div>`;
+  }).join('');
+
+  // "Доля" = процент от всех запросов выбранного сайта/фильтра,
+  // а не процент от самого загруженного дня (прежний код давал 100%).
+  $('daily-body').innerHTML = days.slice(-14).reverse().map(d => {
+    const share = 100 * d.count / Math.max(1, o.total);
+    const width = Math.min(100, Math.max(0, share));
+    const label = share > 0 && share < 0.05 ? '<0.1%' : share.toFixed(1) + '%';
+    return `<tr><td>${d.date}</td><td class="num">${d.count}</td>
+      <td><div class="bar"><div class="bar-fill"
+        style="width:${width}%;background:var(--violet)"></div>
+        <span class="bar-val">${label}</span></div></td></tr>`;
+  }).join('');
+
+  const st = (await api('status-codes')) || [];
+  const total = st.reduce((s, x) => s + x.count, 0);
+  $('status-body').innerHTML = st.length ? st.map(x => {
+    const color = x.status < 300 ? 'var(--ok)' : x.status < 400 ? 'var(--blue)'
+                : x.status < 500 ? 'var(--warn)' : 'var(--err)';
+    const pct = Math.round(100 * x.count / Math.max(1, total));
+    return `<tr class="clickable" data-status="${x.status}">
+      <td><b>${x.status}</b></td><td>${esc(statusCatLabel(x.status))}</td>
+      <td class="num">${x.count}</td>
+      <td><div class="bar"><div class="bar-fill"
+        style="width:${pct}%;background:${color}"></div>
+        <span class="bar-val">${x.percent}%</span></div></td></tr>`;
+  }).join('') : '<tr><td colspan="4">Нет данных</td></tr>';
+
+  $('status-body').querySelectorAll('tr[data-status]').forEach(tr => {
+    tr.addEventListener('click', () => drillDown('status', tr.getAttribute('data-status')));
+  });
+}
+
+async function loadClients() {
+  const a = (await api('clients', { top: 30 })) || [];
+  $('clients-body').innerHTML = a.length ? a.map(x => {
+    const cls = x.topStatus < 300 ? 'ok' : x.topStatus < 400 ? ''
+              : x.topStatus < 500 ? 'warn' : 'err';
+    return `<tr>
+      <td>${ipCell(x.clientIp, x.countryCode)}</td>
+      <td>${countryCell(x.countryCode)}</td>
+      <td class="num">${x.requests}</td>
+      <td>${esc((x.users || []).join(', '))}</td>
+      <td><span class="badge ${cls}">${x.topStatus || '—'}</span></td>
+      <td>${fmt(x.lastSeen)}</td></tr>`;
+  }).join('') : '<tr><td colspan="6">Нет данных</td></tr>';
+}
+
+async function loadUsers() {
+  const a = (await api('users', { top: 30 })) || [];
+  if (!a.length) {
+    $('users-body').innerHTML =
+      '<tr><td colspan="4">Аутентифицированных пользователей нет</td></tr>';
+    return;
+  }
+  $('users-body').innerHTML = a.map(x => `<tr>
+    <td>${userCell(x.userName)}</td>
+    <td class="num">${x.requests}</td>
+    <td class="num">${x.clients}</td>
+    <td>${fmt(x.lastSeen)}</td></tr>`).join('');
+}
+
+async function loadTargets() {
+  const a = (await api('targets', { top: 30 })) || [];
+  $('targets-body').innerHTML = a.length ? a.map(x => `<tr>
+    <td>${urlCell(x.target)}</td>
+    <td class="num">${x.requests}</td>
+    <td class="num">${x.clients}</td>
+    <td class="num">${x.errors}</td></tr>`).join('')
+    : '<tr><td colspan="4">Нет данных</td></tr>';
+}
+
+async function loadErrors5xx() {
+  const a = (await api('errors-5xx-by-url', { top: 50 })) || [];
+  $('err5xx-body').innerHTML = a.length ? a.map(x => {
+    const statuses = (x.statuses || '').split(',').filter(Boolean)
+      .map(s => `<span class="badge err">${esc(s)}</span>`).join(' ');
+    return `<tr>
+      <td>${urlCell(x.target)}</td>
+      <td>${statuses}</td>
+      <td class="num">${x.requests}</td>
+      <td class="num">${x.clients}</td>
+      <td>${fmt(x.firstSeen)}</td>
+      <td>${fmt(x.lastSeen)}</td></tr>`;
+  }).join('') : '<tr><td colspan="6">5xx не зафиксировано</td></tr>';
+}
+
+async function loadSecurity() {
+  const s = await api('security');
+  if (!s) return;
+  const empty = n => `<tr><td colspan="${n}">Нет данных</td></tr>`;
+
+  $('sec-4xx-body').innerHTML = (s.top4xx || []).length ? s.top4xx.map(x => `<tr>
+    <td>${ipCell(x.clientIp, x.countryCode)}</td>
+    <td>${countryCell(x.countryCode)}</td>
+    <td class="num">${x.requests}</td>
+    <td>${urlCell(x.topPath)}</td>
+    <td>${fmt(x.lastSeen)}</td></tr>`).join('') : empty(5);
+
+  $('sec-auth-body').innerHTML = (s.topAuth || []).length ? s.topAuth.map(x => `<tr>
+    <td>${ipCell(x.clientIp, x.countryCode)}</td>
+    <td>${countryCell(x.countryCode)}</td>
+    <td class="num">${x.requests}</td>
+    <td>${urlCell(x.topPath)}</td>
+    <td>${fmt(x.lastSeen)}</td></tr>`).join('') : empty(5);
+
+  $('sec-paths-body').innerHTML = (s.sensitivePaths || []).length ? s.sensitivePaths.map(x => {
+    const ips = (x.topIps || []).map(i =>
+      `${countryFlag(i.countryCode)} ${esc(i.clientIp)} (${i.requests})`).join('<br>');
+    return `<tr>
+      <td class="mono">${esc(x.pattern)}</td>
+      <td class="num">${x.requests}</td>
+      <td class="num">${x.uniqueIps}</td>
+      <td>${ips}</td>
+      <td>${fmt(x.lastSeen)}</td></tr>`;
+  }).join('') : empty(5);
+
+  $('sec-ua-body').innerHTML = (s.suspiciousUa || []).length ? s.suspiciousUa.map(x => `<tr>
+    <td>${ipCell(x.clientIp, x.countryCode)}</td>
+    <td>${countryCell(x.countryCode)}</td>
+    <td class="num">${x.requests}</td>
+    <td class="mono" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+        title="${esc(x.userAgent)}">${esc(x.userAgent)}</td>
+    <td>${fmt(x.lastSeen)}</td></tr>`).join('') : empty(5);
+}
+
+async function loadSystem() {
+  const [methods, ua, rt, sites, refs, slow, slowUrls] = await Promise.all([
+    api('methods'), api('user-agents'), api('response-times'),
+    api('sites', null, { noSite: true }),
+    api('referers', { top: 15 }), api('slow-requests', { top: 15 }),
+    api('slow-urls', { top: 30 })
+  ]);
+
+  $('methods-body').innerHTML = (methods || []).map(x =>
+    `<tr><td>${esc(x.method)}</td><td class="num">${x.count}</td></tr>`).join('')
+    || '<tr><td colspan="2">Нет данных</td></tr>';
+
+  $('ua-body').innerHTML = (ua || []).map(x =>
+    `<tr><td>${esc(x.type)}</td><td class="num">${x.count}</td>
+     <td>${x.percent}%</td></tr>`).join('')
+    || '<tr><td colspan="3">Нет данных</td></tr>';
+
+  const safeRt = rt || {};
+  const hist = safeRt.histogram || [];
+  $('rt-body').innerHTML = `
+    <tr><td>Среднее</td><td class="num">${safeRt.avg ?? 0}</td></tr>
+    <tr><td>P50</td><td class="num">${safeRt.p50 ?? 0}</td></tr>
+    <tr><td>P90</td><td class="num">${safeRt.p90 ?? 0}</td></tr>
+    <tr><td>P95</td><td class="num">${safeRt.p95 ?? 0}</td></tr>
+    <tr><td>P99</td><td class="num">${safeRt.p99 ?? 0}</td></tr>
+    <tr><td>Максимум</td><td class="num">${safeRt.max ?? 0}</td></tr>`;
+
+  if (hist.length) {
+    const maxHist = Math.max(1, ...hist.map(x => x.count));
+    $('rt-hist').innerHTML = hist.map(h => {
+      let pct = Math.round(100 * h.count / maxHist);
+      if (pct < 2 && h.count > 0) pct = 2;
+      const label = rtBucketLabel(h.label);
+      return `<div class="col" title="${label}: ${h.count}">
+        <div class="bar-v"><div style="height:${pct}%"></div></div>
+        <div class="lbl" style="font-size:9px">${label}</div></div>`;
+    }).join('');
+  } else { $('rt-hist').innerHTML = ''; }
+
+  const curSite = $('site-select').value;
+  $('sites-body').innerHTML = (sites || []).map(x => {
+    const active = String(x.siteId) === curSite;
+    const cls = active ? 'style="background:#eef2ff;font-weight:600"' : '';
+    return `<tr ${cls}>
+      <td>${esc(x.name)}</td>
+      <td class="mono">W3SVC${x.siteId}</td>
+      <td class="num">${x.requests}</td></tr>`;
+  }).join('') || '<tr><td colspan="3">Нет данных</td></tr>';
+
+  $('ref-body').innerHTML = (refs && refs.length)
+    ? refs.map(x => `<tr><td class="mono">${esc(x.referer)}</td>
+        <td class="num">${x.count}</td></tr>`).join('')
+    : '<tr><td colspan="2">Нет данных</td></tr>';
+
+  $('slow-body').innerHTML = (slow && slow.length)
+    ? slow.map(x => `<tr>
+        <td>${fmt(x.timestamp)}</td>
+        <td><span class="badge site">${esc(x.siteName || ('W3SVC'+x.siteId))}</span></td>
+        <td>${ipCell(x.clientIp, x.countryCode)}</td>
+        <td>${urlCell(x.target)}</td>
+        <td class="num">${x.status}</td>
+        <td class="num">${x.timeMs}</td></tr>`).join('')
+    : '<tr><td colspan="6">Нет данных</td></tr>';
+
+  $('slow-urls-body').innerHTML = (slowUrls && slowUrls.length)
+    ? slowUrls.map(x => `<tr>
+        <td>${urlCell(x.target)}</td>
+        <td class="num">${x.requests}</td>
+        <td class="num">${x.errors}</td>
+        <td class="num">${x.avg}</td>
+        <td class="num">${x.p50}</td>
+        <td class="num"><b>${x.p95}</b></td>
+        <td class="num">${x.p99}</td>
+        <td class="num">${x.max}</td></tr>`).join('')
+    : '<tr><td colspan="8">Нет данных</td></tr>';
+}
+
+async function loadLogs() {
+  const requestId = ++logsRequestId;
+  const p = { page: logsState.page, pageSize: logsState.pageSize };
+  const g = id => $(id).value.trim();
+  if (g('f-client'))  p.clientIp = g('f-client');
+  if (g('f-user'))    p.userName = g('f-user');
+  if (g('f-status'))  p.status   = g('f-status');
+  if (g('f-method'))  p.method   = g('f-method');
+  if (g('f-target'))  p.targetEq = g('f-target');
+  if (g('f-search'))  p.search   = g('f-search');
+  if (g('f-from'))    p.from     = utcInput('f-from');
+  if (g('f-to'))      p.to       = utcInput('f-to');
+  if (selectedCategories.length) p.statusCategories = selectedCategories.join(',');
+
+  $('logs-info').textContent = 'Загрузка…';
+  const r = await api('logs', p);
+  if (requestId !== logsRequestId) return;
+  logsState.total = r.total;
+
+  const countryFilter = g('f-country').toLowerCase();
+  let items = r.items || [];
+  if (countryFilter) items = items.filter(x => (x.countryCode || '').toLowerCase() === countryFilter);
+
+  $('logs-body').innerHTML = items.length ? items.map(x => {
+    const cls = x.status < 300 ? 'ok' : x.status < 400 ? ''
+              : x.status < 500 ? 'warn' : 'err';
+    const sName = x.siteName || ('W3SVC' + x.siteId);
+    return `<tr>
+      <td>${fmt(x.timestamp)}</td>
+      <td><span class="badge site" title="W3SVC${x.siteId}">${esc(sName)}</span></td>
+      <td>${ipCell(x.clientIp, x.countryCode)}</td>
+      <td>${countryCell(x.countryCode)}</td>
+      <td>${userCell(x.userName)}</td>
+      <td>${esc(x.method)}</td>
+      <td>${urlCell(x.target)}</td>
+      <td class="num"><span class="badge ${cls}">${x.status}</span></td>
+      <td class="num">${x.timeMs}</td>
+      <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+          title="${esc(x.userAgent)}">${esc(x.userAgent)} ${accessInfo.canEdit ? `<button class="ghost" data-v3-action="raw" data-id="${Number(x.rawEventId)}">raw</button>` : ''}</td></tr>`;
+  }).join('') : '<tr><td colspan="10">Ничего не найдено</td></tr>';
+
+  const pages = Math.max(1, Math.ceil(r.total / r.pageSize));
+  $('logs-info').textContent = `Найдено записей: ${r.total}` +
+    (countryFilter ? ` (после фильтра по стране: ${items.length})` : '');
+  $('page-info').textContent = `Страница ${r.page} из ${pages}`;
+}
+
+function applyFilters() { logsState.page = 1; applyStateToHash(); loadLogs(); }
+function clearFilters() {
+  ['f-client','f-country','f-user','f-status','f-method','f-target','f-search','f-from','f-to']
+    .forEach(id => $(id).value = '');
+  selectedCategories = []; renderCategories();
+  logsState.page = 1;
+  applyStateToHash();
+  loadLogs();
+}
+function pagePrev() { if (logsState.page > 1) { logsState.page--; applyStateToHash(); loadLogs(); } }
+function pageNext() {
+  const pages = Math.ceil(logsState.total / logsState.pageSize);
+  if (logsState.page < pages) { logsState.page++; applyStateToHash(); loadLogs(); }
+}
+
+function exportCsv() {
+  if ($('f-country').value.trim()) {
+    showError('\u0424\u0438\u043b\u044c\u0442\u0440 \u0441\u0442\u0440\u0430\u043d\u044b \u0434\u0435\u0439\u0441\u0442\u0432\u0443\u0435\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u043d\u0430 \u0442\u0435\u043a\u0443\u0449\u0435\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435. \u0414\u043b\u044f CSV \u0441\u0431\u0440\u043e\u0441\u044c\u0442\u0435 \u0435\u0433\u043e.');
+    return;
+  }
+  const p = { action: 'export' };
+  const sid = $('site-select').value;
+  if (sid && sid !== '0') p.siteId = sid;
+  const g = id => $(id).value.trim();
+  if (g('f-client'))  p.clientIp = g('f-client');
+  if (g('f-user'))    p.userName = g('f-user');
+  if (g('f-status'))  p.status   = g('f-status');
+  if (g('f-method'))  p.method   = g('f-method');
+  if (g('f-target'))  p.targetEq = g('f-target');
+  if (g('f-search'))  p.search   = g('f-search');
+  if (g('f-from'))    p.from     = utcInput('f-from');
+  if (g('f-to'))      p.to       = utcInput('f-to');
+  if (selectedCategories.length) p.statusCategories = selectedCategories.join(',');
+  window.location.href = 'Reports.ashx?' + new URLSearchParams(p).toString();
+}
+
+let refreshing = false;
+async function refresh() {
+  if (refreshing) return;
+  refreshing = true;
+  clearError();
+  try {
+    const result = await api('refresh', null, { noSite: true, method: 'POST' });
+    flash('Scan queued in the Windows agent. Check the Jobs tab.');
+    await loadSites();
+    await loadAll();
+    await loadHealth();
+    if (result.errors && result.errors.length) showImportErrors(result.errors);
+  } catch (error) { showError(error); }
+  finally { refreshing = false; }
+}
+
+async function loadAll() {
+  const jobs = [loadOverview, loadClients, loadUsers, loadTargets, loadSystem];
+  if (!$('tab-logs').hidden) jobs.push(loadLogs);
+  if (!$('tab-security').hidden) jobs.push(loadSecurity);
+  if (!$('tab-alerts').hidden) jobs.push(loadAlerts);
+  if (!$('tab-errors5xx').hidden) jobs.push(loadErrors5xx);
+  if (!$('tab-diagnostics').hidden) jobs.push(loadDiagnostics);
+  if (!$('tab-performance').hidden) jobs.push(loadPerformance);
+  if (!$('tab-sources').hidden) jobs.push(loadSources);
+  if (!$('tab-bots').hidden) jobs.push(loadBots);
+  const errors = [];
+  await Promise.all(jobs.map(job => job().catch(error => errors.push(error.message))));
+  if (errors.length) showError(errors.join('\n'));
+}
+
+
+// ---- Extended diagnostics & performance ----
+const emptyRow = n => `<tr><td colspan="${n}">Нет данных</td></tr>`;
+const num = v => Number(v || 0).toLocaleString('ru-RU');
+const pctChange = (oldVal,newVal) => oldVal === 0 ? (newVal===0 ? '0%' : 'нет базы') :
+  ((100 * (newVal - oldVal) / oldVal) >= 0 ? '+' : '') +
+  (100 * (newVal - oldVal) / oldVal).toFixed(1)+'%';
+const substatusHints = {
+  '404.0':'Не найдено', '404.2':'Ограничение ISAPI/CGI', '404.3':'Ограничение MIME',
+  '404.7':'Расширение файла запрещено','404.11':'Двойное экранирование URL',
+  '401.1':'Ошибка входа','401.2':'Отклонено конфигурацией сервера',
+  '403.14':'Список каталога запрещён', '500.19':'Ошибка конфигурации IIS',
+  '500.0':'Общая внутренняя ошибка','502.3':'Плохой ответ upstream'
+};
+async function loadDiagnostics() {
+  const d = await api('error-diagnostics');
+  $('diag-codes').innerHTML = (d.codes||[]).map(x => `<tr><td>${x.status}</td><td>${x.subStatus}</td><td>${x.win32Status}</td><td>${esc(substatusHints[x.status+'.'+x.subStatus] || 'См. документацию IIS / FREB')}</td><td class="num">${num(x.requests)}</td></tr>`).join('') || emptyRow(5);
+  $('diag-404').innerHTML = (d.urls404||[]).map(x => `<tr><td>${urlCell(x.target)}</td><td class="num">${num(x.requests)}</td><td class="num">${num(x.clients)}</td><td class="num">${num(x.suspectedBotRequests)}</td></tr>`).join('') || emptyRow(4);
+  $('diag-5xx').innerHTML = (d.urls5xx||[]).map(x => `<tr><td>${urlCell(x.target)}</td><td class="num">${num(x.requests)}</td><td class="num">${num(x.clients)}</td><td class="num">${x.avgMs}</td></tr>`).join('') || emptyRow(4);
+  $('diag-referers').innerHTML = (d.referers404||[]).map(x => `<tr><td class="mono" style="max-width:600px;overflow-wrap:anywhere">${esc(x.referer)}</td><td class="num">${num(x.requests)}</td><td class="num">${num(x.targets)}</td></tr>`).join('') || emptyRow(3);
+}
+function chart(canvasId, tipId, points, lines) {
+  const canvas = $(canvasId), dpr = window.devicePixelRatio || 1;
+  const w = Math.max(330, canvas.clientWidth || 900), h = 240;
+  canvas.width = Math.round(w*dpr); canvas.height = Math.round(h*dpr);
+  const ctx = canvas.getContext('2d'); ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,w,h);
+  ctx.font='11px Segoe UI, sans-serif';
+  const left=51,right=14,top=15,bottom=30,pw=w-left-right,ph=h-top-bottom;
+  const vals=points.flatMap(p=>lines.map(l=>Number(p[l.field]||0)));
+  const max=Math.max(1,...vals);
+  ctx.strokeStyle='#e5e7eb';ctx.fillStyle='#64748b';ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=top+ph*(1-i/4);
+    ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();
+    ctx.fillText((max*i/4).toFixed(max<10?1:0),2,y+4);
+  }
+  const xp=i=>left+(points.length<2?0:i*pw/(points.length-1));
+  const yp=v=>top+ph*(1-v/max);
+  for(const l of lines){
+    ctx.beginPath();ctx.strokeStyle=l.color;ctx.lineWidth=2;
+    let connected=false;
+    points.forEach((p,i)=>{if(p[l.field]===null||p[l.field]===undefined){connected=false;return;}
+      const x=xp(i),y=yp(Number(p[l.field]));if(connected)ctx.lineTo(x,y);else ctx.moveTo(x,y);connected=true;});
+    ctx.stroke();
+  }
+  if(points.length){
+    const start=fmt(points[0].ts),end=fmt(points[points.length-1].ts);
+    ctx.fillStyle='#64748b';ctx.fillText(start,left,h-6);
+    ctx.textAlign='right';ctx.fillText(end,w-right,h-6);ctx.textAlign='start';
+  }
+  const tip=$(tipId);
+  canvas.onmousemove=e=>{
+    if(!points.length)return;
+    const rect=canvas.getBoundingClientRect();
+    const i=Math.max(0,Math.min(points.length-1,Math.round(((e.clientX-rect.left)/rect.width*w-left)/pw*(points.length-1))));
+    const p=points[i];tip.textContent=fmt(p.ts)+' · '+lines.map(l=>l.name+': '+p[l.field]).join(' · ');
+  };
+  canvas.onmouseleave=()=>{tip.textContent='Наведите на график для значений';};
+}
+async function loadPerformance(){
+  const h=$('perf-hours').value, days=$('perf-days').value;
+  const [x,c]=await Promise.all([api('performance',{hours:h}),api('comparison',{days})]);
+  const rows=x.points||[];
+  chart('traffic-canvas','traffic-tip',rows,[
+    {field:'requests',name:'Всего',color:'#2563eb'},
+    {field:'status4xx',name:'4xx',color:'#d97706'},
+    {field:'status5xx',name:'5xx',color:'#dc2626'}]);
+  chart('latency-canvas','latency-tip',rows,[
+    {field:'p95Ms',name:'p95, мс',color:'#7c3aed'},
+    {field:'avgMs',name:'Среднее, мс',color:'#059669'}]);
+  const total=rows.reduce((a,b)=>a+Number(b.requests),0);
+  const peak=rows.reduce((a,b)=>Math.max(a,Number(b.peakRps)),0);
+  const maxP95=rows.reduce((a,b)=>Math.max(a,Number(b.p95Ms)),0);
+  $('perf-kpis').innerHTML=`<div class="kpi"><div class="kpi-label">Запросов в окне</div><div class="kpi-value">${num(total)}</div></div><div class="kpi"><div class="kpi-label">Пиковый RPS</div><div class="kpi-value">${num(peak)}</div></div><div class="kpi"><div class="kpi-label">Макс. p95 бакета, мс</div><div class="kpi-value">${maxP95.toFixed(1)}</div></div><div class="kpi"><div class="kpi-label">Шаг, минут</div><div class="kpi-value">${x.bucketMinutes}</div></div>`;
+  chart('rates-canvas','rates-tip',rows,[{field:'avgRps',name:'Average RPS',color:'#2563eb'},{field:'peakRps',name:'Peak RPS',color:'#d97706'}]);
+  $('rpm-summary').textContent='Average RPM in window: '+(total/(Number(h)*60)).toFixed(2);
+  const prev=c.previous,cur=c.current;
+  $('compare-range').textContent=fmt(prev.from)+' - '+fmt(prev.to)+' | '+fmt(cur.from)+' - '+fmt(cur.to)+' (UTC)';
+  const metrics=[['Запросы','requests'],['4xx','errors4xx'],['5xx','errors5xx'],['Среднее, мс','avgMs'],['p95, мс','p95Ms']];
+  $('compare-body').innerHTML=metrics.map(([label,key])=>`<tr><td>${label}</td><td>${num(prev[key])}</td><td>${num(cur[key])}</td><td>${pctChange(Number(prev[key]),Number(cur[key]))}</td></tr>`).join('');
+}
+async function loadBots(){
+  const d=await api('bots');
+  $('asn-count').textContent=`ASN-диапазонов: ${d.asnRanges}. ${d.asnRanges?'Локальное обогащение доступно.':'Добавьте asn.csv для отображения ASN.'}`;
+  $('bots-body').innerHTML=(d.rows||[]).map(x=>`<tr>
+    <td>${ipCell(x.ip,x.country)}</td><td>${countryCell(x.country)}</td>
+    <td>${esc((x.asn&&x.asn.asn)||'—')} ${esc((x.asn&&x.asn.organization)||'')}</td>
+    <td><span class="tag ${x.suspected==='suspect'?'problem':'pending'}">${esc(x.suspected)}</span></td>
+    <td class="num">${num(x.requests)}</td><td class="num">${num(x.errors4xx)}</td>
+    <td class="num">${num(x.authFailures)}</td><td class="mono" title="${esc(x.agent)}" style="max-width:220px;overflow-wrap:anywhere">${esc(x.agent)}</td></tr>`).join('') || emptyRow(8);
+}
+</script>
+<script src="v3.js"></script>
+</body>
+</html>

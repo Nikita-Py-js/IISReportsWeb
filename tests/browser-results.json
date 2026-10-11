@@ -1,0 +1,131 @@
+{
+  "suite": "Chromium + mocked API, no IIS/SQL execution",
+  "tests": [
+    {
+      "test": "startup renders overview with stored site",
+      "status": "PASS"
+    },
+    {
+      "test": "daily share uses total, not maximum",
+      "status": "PASS"
+    },
+    {
+      "test": "tab overview",
+      "status": "PASS"
+    },
+    {
+      "test": "tab clients",
+      "status": "PASS"
+    },
+    {
+      "test": "tab users",
+      "status": "PASS"
+    },
+    {
+      "test": "tab targets",
+      "status": "PASS"
+    },
+    {
+      "test": "tab diagnostics",
+      "status": "PASS"
+    },
+    {
+      "test": "tab performance",
+      "status": "PASS"
+    },
+    {
+      "test": "tab sources",
+      "status": "PASS"
+    },
+    {
+      "test": "tab bots",
+      "status": "PASS"
+    },
+    {
+      "test": "tab errors5xx",
+      "status": "PASS"
+    },
+    {
+      "test": "tab security",
+      "status": "PASS"
+    },
+    {
+      "test": "tab logs",
+      "status": "PASS"
+    },
+    {
+      "test": "tab alerts",
+      "status": "PASS"
+    },
+    {
+      "test": "tab system",
+      "status": "PASS"
+    },
+    {
+      "test": "tab agent",
+      "status": "PASS"
+    },
+    {
+      "test": "tab checks",
+      "status": "PASS"
+    },
+    {
+      "test": "tab incidents",
+      "status": "PASS"
+    },
+    {
+      "test": "tab queue",
+      "status": "PASS"
+    },
+    {
+      "test": "tab access",
+      "status": "PASS"
+    },
+    {
+      "test": "all tabs without JavaScript errors",
+      "status": "PASS"
+    },
+    {
+      "test": "check name HTML escaped",
+      "status": "PASS"
+    },
+    {
+      "test": "check editor sends typed JSON and CSRF",
+      "status": "PASS"
+    },
+    {
+      "test": "all-sites rule opens as site 0",
+      "status": "PASS"
+    },
+    {
+      "test": "rule editor preserves revision",
+      "status": "PASS"
+    },
+    {
+      "test": "expired CSRF retried exactly once",
+      "status": "PASS"
+    },
+    {
+      "test": "origin denial not retried",
+      "status": "PASS"
+    },
+    {
+      "test": "raw line dialog is text only",
+      "status": "PASS"
+    },
+    {
+      "test": "reader cannot see write controls",
+      "status": "PASS"
+    },
+    {
+      "test": "role denied shown separately from CSRF",
+      "status": "PASS"
+    },
+    {
+      "test": "no unhandled browser errors",
+      "status": "PASS"
+    }
+  ],
+  "passed": 31,
+  "browserErrors": []
+}

@@ -1,0 +1,29 @@
+# Local installation secrets
+local/
+*.local.config
+agent-local.config
+web/Web.config
+agent/IISReports.Agent.exe.config
+*.bak
+*.bak.*
+*.pfx
+*.p12
+*.key
+# Operator data / proprietary enrichment databases
+web/sites.json
+web/App_Data/*
+!web/App_Data/*.example
+*.log
+*.mdf
+*.ldf
+*.bak.sql
+# Build/release products
+build/*
+!build/README.md
+release/
+agent/bin/
+agent/obj/
+agent/source/build/
+__pycache__/
+.vs/
+*.user

@@ -1,0 +1,14 @@
+/* v3 additions; existing chart/table visual language is retained. */
+[hidden]{display:none!important}.operator-only{display:none}
+.v3-form{border:1px solid #cbd5e1;padding:18px;border-radius:10px;margin-top:20px;background:#f8fafc}
+.v3-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-bottom:18px}
+.v3-form-grid label{display:flex;flex-direction:column;gap:6px;color:#475569}
+.v3-form-grid input,.v3-form-grid select{width:100%;min-width:0}
+.v3-form-grid input[type=checkbox]{width:22px;height:22px}
+.v3-pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:#f1f5f9;padding:16px;border-radius:8px;max-height:65vh;overflow:auto}
+.v3-small{font-size:11px;padding:5px 8px;margin:2px;white-space:nowrap}
+.v3-problem{color:#b91c1c}#source-roots{white-space:pre-wrap;overflow-wrap:anywhere;margin:14px 0;font-size:12px}
+#v3-dialog{width:min(1000px,95vw);max-height:90vh;border:1px solid #94a3b8;border-radius:12px;padding:20px}
+#v3-dialog::backdrop{background:#0f172a80}
+#checks-table td,#incidents-table td,#rules-table td{overflow-wrap:anywhere;max-width:460px}
+@media(max-width:700px){body{padding:12px}.toolbar{align-items:stretch}.v3-form{padding:12px}}

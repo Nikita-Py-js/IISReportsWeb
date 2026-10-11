@@ -1,0 +1,24 @@
+name: Windows build and local tests
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile C# 5 and run local tests
+        shell: powershell
+        run: .\tools\Build-And-Test.ps1
+      - name: Package the Windows release
+        shell: powershell
+        run: .\tools\Make-Windows-Release.ps1 -SkipBuild
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IISReports-Windows
+          path: release/*.zip
+          if-no-files-found: error
+# No deployment, real IIS/NTLM test or SQL integration is performed here.
