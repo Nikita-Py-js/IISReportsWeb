@@ -1,7 +1,7 @@
 {
   "suite": "portable source/package consistency (not compilation)",
-  "passed": 36,
-  "total": 36,
+  "passed": 63,
+  "total": 63,
   "tests": [
     {
       "test": "release version",
@@ -21,6 +21,10 @@
     },
     {
       "test": "standalone source matches V3Monitoring.cs",
+      "status": "PASS"
+    },
+    {
+      "test": "standalone source matches V3Discovery.cs",
       "status": "PASS"
     },
     {
@@ -133,6 +137,110 @@
     },
     {
       "test": "clean config independent of previous install",
+      "status": "PASS"
+    },
+    {
+      "test": "migration adds nineteenth table",
+      "status": "PASS"
+    },
+    {
+      "test": "schema version 310 checked by runtime",
+      "status": "PASS"
+    },
+    {
+      "test": "new migration does not delete or truncate data",
+      "status": "PASS"
+    },
+    {
+      "test": "web granted source flag/revision columns only",
+      "status": "PASS"
+    },
+    {
+      "test": "source choices use explicit nullable boolean",
+      "status": "PASS"
+    },
+    {
+      "test": "source changes use revision and rollback scope",
+      "status": "PASS"
+    },
+    {
+      "test": "rediscovery never updates Enabled or Revision",
+      "status": "PASS"
+    },
+    {
+      "test": "snapshot is bounded and validated before Apply",
+      "status": "PASS"
+    },
+    {
+      "test": "snapshot validates machine and freshness",
+      "status": "PASS"
+    },
+    {
+      "test": "missing metadata retires availability, not monitoring choice",
+      "status": "PASS"
+    },
+    {
+      "test": "pause checked inside batch transaction",
+      "status": "PASS"
+    },
+    {
+      "test": "pause is not treated as corrupted source",
+      "status": "PASS"
+    },
+    {
+      "test": "sources-save shares mutation CSRF guard",
+      "status": "PASS"
+    },
+    {
+      "test": "sources-save requires editor role",
+      "status": "PASS"
+    },
+    {
+      "test": "agent installation installs inventory task",
+      "status": "PASS"
+    },
+    {
+      "test": "publisher uses IIS MWA without changing config",
+      "status": "PASS"
+    },
+    {
+      "test": "publisher handles unsupported modes explicitly",
+      "status": "PASS"
+    },
+    {
+      "test": "publisher replaces snapshot atomically",
+      "status": "PASS"
+    },
+    {
+      "test": "task principal uses SYSTEM, not agent admin",
+      "status": "PASS"
+    },
+    {
+      "test": "task protects parent and directory DACL",
+      "status": "PASS"
+    },
+    {
+      "test": "database installer applies and verifies 005/006",
+      "status": "PASS"
+    },
+    {
+      "test": "clean install needs no manual source variables",
+      "status": "PASS"
+    },
+    {
+      "test": "HTTP test protects source endpoint",
+      "status": "PASS"
+    },
+    {
+      "test": "build includes discovery and SQL regression tests",
+      "status": "PASS"
+    },
+    {
+      "test": "standalone and csproj include discovery",
+      "status": "PASS"
+    },
+    {
+      "test": "SQL connection builder fix preserved",
       "status": "PASS"
     },
     {

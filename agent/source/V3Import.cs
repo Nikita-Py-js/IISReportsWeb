@@ -45,20 +45,22 @@ namespace IISReports.V3
             Store.Exec(c,null,"INSERT ir3.ImportRuns(Id,StartedUtc,Kind,Status) VALUES(@id,@t,'scan','running')","@id",run,"@t",started);
             try
             {
-                foreach(var source in Store.Rows(c,null,"SELECT * FROM ir3.Sources WHERE Enabled=1 AND (@id IS NULL OR Id=@id) ORDER BY Id","@id",onlySourceId.HasValue?(object)onlySourceId.Value:null))
+                foreach(var source in Store.Rows(c,null,"SELECT * FROM ir3.Sources WHERE Enabled=1 AND (AutoDiscovered=0 OR Available=1) AND (@id IS NULL OR Id=@id) ORDER BY Id","@id",onlySourceId.HasValue?(object)onlySourceId.Value:null))
                 {
-                    int sourceId=Store.Num(source["Id"]);string root=Store.Str(source["RootPath"]);int errors=0;
+                    int sourceId=Store.Num(source["Id"]);string root=Store.Str(source["RootPath"]);int errors=0;bool paused=false;
                     try
                     {
                         foreach(string path in Enumerate(root).OrderBy(p=>p,StringComparer.OrdinalIgnoreCase))
                         {
-                            Beat(); long fileId=Register(sourceId,path);
+                            Beat(); if(!SourceSelection.CanImport(c,null,sourceId,false)){paused=true;break;}
+                            long fileId=Register(sourceId,path);
                             try
                             {
                                 string state=Store.Str(Store.Scalar(c,null,"SELECT Status FROM ir3.Files WHERE Id=@id","@id",fileId));
                                 if(state=="changed") { errors++;continue; }
                                 rows+=ImportFile(fileId,false,0);
                             }
+                            catch(SourcePausedException){paused=true;break;}
                             catch(OperationCanceledException){throw;}
                             catch(Exception ex)
                             {
@@ -67,6 +69,7 @@ namespace IISReports.V3
                                     "@s",ex is InvalidDataException?"changed":"error","@e",Settings.Clip(ex.Message,1024),"@id",fileId);
                             }
                         }
+                        if(paused)continue; // Do not mark unvisited files as missing when an operator paused a source.
                         Store.Exec(c,null,"UPDATE ir3.Files SET Status='missing',LastError='Source file is missing; history retained.' WHERE SourceId=@s AND (LastSeenUtc IS NULL OR LastSeenUtc<@t)","@s",sourceId,"@t",started);
                         if(Store.Long(Store.Scalar(c,null,"SELECT COUNT(*) FROM ir3.Files WHERE SourceId=@s AND Status='missing'","@s",sourceId))>0)errors++;
                         if(errors>0)ok=false;
@@ -115,9 +118,10 @@ INSERT ir3.Generations(FileId,Number,Reason) OUTPUT inserted.Id VALUES(@f,@n,@r)
         }
         public void NewGeneration(long fileId,Guid jobId)
         {
-            var file=FileState(fileId);ValidatePath(Store.Str(file["FullPath"]),Store.Str(file["RootPath"]));
+            var file=FileState(fileId);SourceSelection.RequireImport(c,null,Store.Num(file["SourceId"]),false);ValidatePath(Store.Str(file["FullPath"]),Store.Str(file["RootPath"]));
             using(var tx=c.BeginTransaction())
             {
+                SourceSelection.RequireImport(c,tx,Store.Num(file["SourceId"]),true);
                 object done=Store.Scalar(c,tx,"SELECT GenerationId FROM ir3.Jobs WITH(UPDLOCK) WHERE Id=@id","@id",jobId);
                 if(done==null)
                 {
@@ -172,6 +176,7 @@ INSERT ir3.Generations(FileId,Number,Reason) OUTPUT inserted.Id VALUES(@f,@n,@r)
         public long ImportFile(long fileId,bool replay,long replayStart,long? snapshotEnd,out long next)
         {
             var f=FileState(fileId);string path=Store.Str(f["FullPath"]);long gen=Store.Long(f["ActiveGenerationId"]);
+            SourceSelection.RequireImport(c,null,Store.Num(f["SourceId"]),false);
             ValidatePath(path,Store.Str(f["RootPath"]));
             long position=replay?replayStart:Store.Long(f["CommittedOffset"]);
             long line=Store.Long(f["LineNumber"]);string fields=Store.Str(f["Fields"]);
@@ -196,7 +201,7 @@ INSERT ir3.Generations(FileId,Number,Reason) OUTPUT inserted.Id VALUES(@f,@n,@r)
                 if(batch.End>position)
                 {
                     if(!Hashing.Equal(batch.Hash,Hashing.Range(stream,batch.Start,batch.End)))throw new InvalidDataException("File changed before the import transaction.");
-                    SaveBatch(gen,Store.Num(f["SiteId"]),path,batch);
+                    SaveBatch(Store.Num(f["SourceId"]),gen,Store.Num(f["SiteId"]),path,batch);
                 }
                 string status=batch.End<size?"pending":"ok";
                 if(batch.End==position && position<size)status="partial-line";
@@ -206,10 +211,12 @@ INSERT ir3.Generations(FileId,Number,Reason) OUTPUT inserted.Id VALUES(@f,@n,@r)
             }
         }
         private static readonly string[] RequestColumns={"Ts","SiteId","ServerIp","ServerPort","ClientIp","UserName","Method","UriStem","UriQuery","Status","SubStatus","Win32Status","TimeMs","UserAgent","Referer","LogFile"};
-        private void SaveBatch(long generationId,int siteId,string path,ReadBatch batch)
+        private void SaveBatch(int sourceId,long generationId,int siteId,string path,ReadBatch batch)
         {
             using(var tx=c.BeginTransaction())
             {
+                // Serialize a batch commit with the web pause operation.
+                SourceSelection.RequireImport(c,tx,sourceId,true);
                 Store.Exec(c,tx,@"CREATE TABLE #ImportStage(ByteOffset bigint NOT NULL,EndOffset bigint NOT NULL,LineNumber bigint NOT NULL,
 RawText nvarchar(max) NOT NULL,RawHash binary(32) NOT NULL,ParseError nvarchar(512) NULL,
 Ts datetime2(7) NULL,SiteId int NOT NULL,ServerIp nvarchar(45) NULL,ServerPort int NULL,ClientIp nvarchar(45) NULL,

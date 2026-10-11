@@ -6,8 +6,8 @@ using System.ServiceProcess;
 using System.Threading;
 using IISReports.V3;
 
-[assembly: System.Reflection.AssemblyVersion("3.0.2.0")]
-[assembly: System.Reflection.AssemblyFileVersion("3.0.2.0")]
+[assembly: System.Reflection.AssemblyVersion("3.1.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("3.1.0.0")]
 
 namespace IISReports.Agent
 {
@@ -19,7 +19,7 @@ namespace IISReports.Agent
         private void Beat()
         {
             if(stop.WaitOne(0))throw new OperationCanceledException();
-            Store.Exec(c,null,"UPDATE ir3.AgentState SET HeartbeatUtc=@t,MachineName=@m,Version='3.0.2' WHERE Id=1","@t",DateTime.UtcNow,"@m",Environment.MachineName);
+            Store.Exec(c,null,"UPDATE ir3.AgentState SET HeartbeatUtc=@t,MachineName=@m,Version='3.1.0' WHERE Id=1","@t",DateTime.UtcNow,"@m",Environment.MachineName);
         }
         public void Run(bool once)
         {
@@ -36,22 +36,23 @@ namespace IISReports.Agent
  @Resource=N'IISReports.v3.agent',@LockMode='Exclusive',@LockOwner='Session',@LockTimeout=0; SELECT @r;"));
                         if(locked<0)throw new InvalidOperationException("Another IISReports v3 agent already owns the database lock.");
                         Store.Exec(c,null,@"IF NOT EXISTS(SELECT 1 FROM ir3.AgentState WHERE Id=1)
- INSERT ir3.AgentState(Id,MachineName,HeartbeatUtc,State,Version) VALUES(1,@m,@now,'starting','3.0.2');
+ INSERT ir3.AgentState(Id,MachineName,HeartbeatUtc,State,Version) VALUES(1,@m,@now,'starting','3.1.0');
  UPDATE ir3.AgentState SET State='running',LastError=NULL,MachineName=@m,HeartbeatUtc=@now WHERE Id=1;
  UPDATE ir3.Jobs SET State='queued',Result='Resumed after agent restart.' WHERE State='running';
  UPDATE ir3.NotificationOutbox SET State='pending' WHERE State='sending';
  UPDATE ir3.ImportRuns SET Status='interrupted',FinishedUtc=@now,Detail='Agent restarted; committed batches are retained.' WHERE Status='running';",
                             "@m",Environment.MachineName,"@now",DateTime.UtcNow);
-                        var imports=new ImportEngine(c,Beat);var monitor=new MonitorEngine(c,Beat);DateTime nextScan=DateTime.MinValue;
+                        var imports=new ImportEngine(c,Beat);var monitor=new MonitorEngine(c,Beat);var discovery=new SourceDiscovery(c);DateTime nextScan=DateTime.MinValue;
                         do
                         {
                             Beat();
                             if(DateTime.UtcNow>=nextScan)
                             {
-                                bool success=imports.Scan();
+                                bool discovered=discovery.Sync();
+                                bool success=imports.Scan() && discovered;
                                 Store.Exec(c,null,@"UPDATE ir3.AgentState SET LastScanUtc=@t,
  LastSuccessfulScanUtc=CASE WHEN @ok=1 THEN @t ELSE LastSuccessfulScanUtc END,
- State=@s,LastError=@e WHERE Id=1","@t",DateTime.UtcNow,"@ok",success,"@s",success?"running":"warning","@e",success?null:"Some sources have errors. Review Sources.");
+ State=@s,LastError=@e WHERE Id=1","@t",DateTime.UtcNow,"@ok",success,"@s",success?"running":"warning","@e",success?null:"Some sources or automatic discovery have errors. Review Sources.");
                                 nextScan=DateTime.UtcNow.AddSeconds(Settings.Int("IISReportsScanSeconds",30,5,3600));
                             }
                             ProcessJob(imports);

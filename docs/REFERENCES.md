@@ -20,3 +20,13 @@
 | Защита исходящих запросов | [OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html) |
 
 Перед установкой проверяйте актуальную поддержку и лицензию конкретной версии ОС, SQL и используемой базы GeoIP/ASN. Не загружайте установщики из случайных ссылок в issue.
+
+## Автоматические источники 3.1.0
+
+- [IIS: per-site logFile, форматы, каталоги и File/ETW](https://learn.microsoft.com/en-us/iis/configuration/system.applicationhost/sites/site/logfile/).
+- [Microsoft.Web.Administration.SiteLogFile](https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.administration.sitelogfile?view=iis-dotnet).
+- [IIS: централизованное журналирование](https://learn.microsoft.com/en-us/iis/configuration/system.applicationhost/log/).
+- [New-ScheduledTaskTrigger](https://learn.microsoft.com/en-us/powershell/module/scheduledtasks/new-scheduledtasktrigger?view=windowsserver2025-ps).
+- [GRANT прав на отдельные столбцы SQL](https://learn.microsoft.com/en-us/sql/t-sql/statements/grant-object-permissions-transact-sql?view=sql-server-ver17).
+
+Документация Microsoft описывает платформу. Конкретные интервалы, поведение флажков, snapshot и SQL Revision — реализация этого проекта, проверяемая его тестами.

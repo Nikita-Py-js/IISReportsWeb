@@ -1,43 +1,44 @@
 {
-  "release": "3.0.2",
-  "distribution": "complete source release; no precompiled Windows binaries",
-  "environment": "Linux container; Chromium and Node.js; no Windows/IIS/SQL Server runtime",
+  "release": "3.1.0",
+  "distribution": "Full source project, automatic IIS source discovery and monitoring checkboxes; no precompiled Windows EXE",
+  "environment": "Linux container, Chromium/Node.js/Python; no Windows, IIS or SQL Server runtime",
   "executed": [
     {
-      "suite": "Chromium browser scenarios using mocked API",
-      "passed": 31,
+      "suite": "Chromium scenarios with mocked API",
+      "passed": 44,
       "failed": 0,
       "report": "browser-results.json"
     },
     {
-      "suite": "Portable source/package consistency (not compilation)",
-      "passed": 36,
+      "suite": "Portable source consistency, NOT compilation",
+      "passed": 63,
       "failed": 0,
       "report": "consistency-results.json"
     },
     {
-      "suite": "JavaScript syntax with node --check",
+      "suite": "JavaScript syntax: node --check",
       "passed": 2,
       "failed": 0,
       "targets": [
         "web/v3.js",
-        "inline script from web/index.html"
+        "inline script in web/index.html"
       ]
     }
   ],
-  "packaging_checks": [
-    "ZIP CRC validation",
-    "every per-file SHA256 checked against archive bytes",
-    "manifest covers exact source files",
-    "standalone agent C# sources are byte-identical to canonical sources"
-  ],
   "not_executed": [
-    "PowerShell AST parsing and execution on Windows PowerShell 5.1",
-    ".NET Framework C# compilation and Windows unit tests for release 3.0.2",
-    "SQL Server provisioning, permission grants and SQL integration tests",
-    "IIS deployment, real Windows Authentication and server-side CSRF tests",
-    "Windows service installation, log import and webhook delivery",
+    "PowerShell parser/runtime on Windows PowerShell 5.1",
+    ".NET Framework C# compilation and the included UnitTests.exe",
+    "SQL 005 migration, column permissions, transaction/pause/discovery integration tests",
+    "IIS/Windows Authentication and live server-side CSRF tests",
+    "SYSTEM scheduled task, real IIS inventory and NTFS ACL changes",
+    "Windows service installation, real log import and webhook delivery",
     "GitHub Actions workflow"
   ],
-  "acceptance": "Run the documented Windows build, schema verification and isolated HTTP tests on a staging server before production."
+  "acceptance": "Run Build-And-Test, database checks, isolated Test-Http and discovery/pause tests on a Windows staging server. Browser mocks do not prove backend integration.",
+  "packaging_checks": [
+    "ZIP CRC",
+    "source/agent sync",
+    "complete manifests",
+    "per-file SHA256 verified"
+  ]
 }

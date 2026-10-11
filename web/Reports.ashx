@@ -1,4 +1,4 @@
-﻿<%@ WebHandler Language="C#" Class="ReportsHandler" %>
+<%@ WebHandler Language="C#" Class="ReportsHandler" %>
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -542,6 +542,11 @@ FROM ir3.CurrentRequests";
         }
         var all = new HashSet<int>(counts.Keys);
         foreach (var id in SiteNames.All.Keys) all.Add(id);
+        using(var c=Db.Open())using(var cmd=c.CreateCommand())
+        {
+            cmd.CommandText="SELECT DISTINCT SiteId FROM ir3.Sources";
+            using(var reader=cmd.ExecuteReader())while(reader.Read())all.Add(reader.GetInt32(0));
+        }
         return all.OrderBy(id => id)
             .Select(id => new
             {

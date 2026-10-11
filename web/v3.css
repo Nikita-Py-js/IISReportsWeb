@@ -7,8 +7,15 @@
 .v3-form-grid input[type=checkbox]{width:22px;height:22px}
 .v3-pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:#f1f5f9;padding:16px;border-radius:8px;max-height:65vh;overflow:auto}
 .v3-small{font-size:11px;padding:5px 8px;margin:2px;white-space:nowrap}
-.v3-problem{color:#b91c1c}#source-roots{white-space:pre-wrap;overflow-wrap:anywhere;margin:14px 0;font-size:12px}
+.v3-problem{color:#b91c1c}#source-roots{white-space:normal;overflow-wrap:anywhere;margin:14px 0;font-size:12px}
 #v3-dialog{width:min(1000px,95vw);max-height:90vh;border:1px solid #94a3b8;border-radius:12px;padding:20px}
 #v3-dialog::backdrop{background:#0f172a80}
 #checks-table td,#incidents-table td,#rules-table td{overflow-wrap:anywhere;max-width:460px}
 @media(max-width:700px){body{padding:12px}.toolbar{align-items:stretch}.v3-form{padding:12px}}
+
+/* Source monitoring switches */
+#source-roots input[type="checkbox"] { width:20px; height:20px; cursor:pointer; }
+#source-roots .source-dirty td { background: #fff8df; }
+#source-roots .mono { overflow-wrap:anywhere; }
+#discovery-state { margin-bottom:12px; overflow-wrap:anywhere; }
+#source-search { min-width:260px; }

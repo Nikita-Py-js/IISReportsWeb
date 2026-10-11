@@ -1,4 +1,4 @@
-# API 3.0.2
+# API 3.1.0
 
 [README](../README.md)
 
@@ -13,7 +13,7 @@
 | health | читатель | БД, схема, heartbeat, ошибки источников; проверять `healthy` |
 | diag | оператор | Расширенное состояние и ошибка БД |
 | agent | читатель | Строка AgentState |
-| sources | оператор | Корни и максимум 2000 файлов |
+| sources | оператор | Все источники с выбором/Revision, состояние обнаружения и максимум 2000 файлов |
 | generations&fileId=N | оператор | Все версии файла |
 | jobs | оператор | Последние 100 заданий |
 | checks | читатель | Проверки сайтов |
@@ -27,6 +27,8 @@
 | audit | оператор | Последние 200 изменений |
 
 ## POST
+
+- `sources-save`: пакет изменений `Enabled` по источникам с проверкой `revision`; HTTP 200 или 409, весь пакет атомарный. Подробности ниже.
 
 - `refresh`: тело `{}`; создаёт задание scan; HTTP 202.
 - `job-create`: `{"kind":"verify","fileId":1}`; kind: scan, verify, replay, new-generation. Для scan fileId не нужен. HTTP 202.
@@ -51,3 +53,38 @@ overview, timeline, clients, users, targets, status-codes, methods, user-agents,
 Инцидент не равен уведомлению: он сохраняется даже без настроенного webhook. Уведомление `sent` означает успешный HTTP-ответ получателя, а не прочтение человеком.
 
 `LastSuccessfulScanUtc` отражает успешный проход источников; это не обязательно время появления последнего запроса и не гарантия отсутствия оставшихся порций большого файла. Контрольные точки и очередь показываются отдельно.
+
+## Автоматическое обнаружение и флажки
+
+`GET sources` возвращает объект `{sources, files, discovery, total, shown, integrityScope}`.
+
+У источника поля `Id`, `Name`, `SiteId`, `RootPath`, `Enabled`, `Revision`, `AutoDiscovered`, `Available`, `IisName`, `DiscoveryStatus`, `DiscoveryMessage`, `LastDiscoveredUtc`, `LastScanUtc`, `LastError`.
+
+- `Enabled` — сохранённый выбор оператора.
+- `Available` — текущая пригодность источника из снимка IIS, **не** выбор.
+- Для автоматически найденного источника импорт идёт только при `Enabled && Available`.
+- `discovery` — массив с одной записью состояния задачи/чтения снимка (либо пустой до первого запуска).
+- `files` содержит `sourceId` и `monitoring`; исторические файлы не исчезают после паузы.
+- `Name` сохраняет существующее пользовательское имя; актуальное название IIS находится в `IisName`.
+
+```http
+POST Reports.ashx?action=sources-save
+Content-Type: application/json
+Origin: https://reports.example.test:8443
+X-IISReports-CSRF: <token>
+Cookie: <matching csrf cookie>
+```
+
+```json
+{"changes":[{"id":1,"revision":1,"enabled":false},{"id":2,"revision":4,"enabled":true}]}
+```
+
+Ответ: `{"ok":true,"changed":2,"message":"..."}`.
+
+Передаются **только изменённые** источники; `id` здесь — `ir3.Sources.Id`, не IIS SiteId. От 1 до 1000 уникальных id, до 64 КиБ JSON. Булев `enabled` обязателен, отсутствующее поле не считается `false`.
+
+Ошибки: 400 `invalid_sources`/`invalid_json`, 409 `revision_conflict`, обычные 401/403 проверки роли и CSRF. Неверная revision хотя бы одной строки откатывает весь пакет. В API нельзя задавать произвольные пути журналов или ACL.
+
+`job-create` с replay/new-generation для отключённого/недоступного источника возвращает 409 `source_disabled`. Verify по ранее зарегистрированному файлу остаётся доступен, но может отказать из-за отсутствия файла. Агент повторно проверяет разрешение перед коммитом порции импорта.
+
+`health` дополнен `discoveryHealthy`; общая исправность обнаружения не гарантирует доступность каждого неподдерживаемого источника — смотрите строковые статусы в `sources`.

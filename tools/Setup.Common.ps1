@@ -43,14 +43,31 @@ function New-SqlConnectionString {
     param([string]$SqlServer,[string]$Database,[System.Management.Automation.PSCredential]$Credential,
           [bool]$TrustServerCertificate=$false,[string]$Application='IISReports.Setup')
     Add-Type -AssemblyName System.Data
-    $b = New-Object Data.SqlClient.SqlConnectionStringBuilder
-    $b.DataSource = $SqlServer; $b.InitialCatalog = $Database
-    $b.Encrypt = $true; $b.TrustServerCertificate = $TrustServerCertificate
-    $b.ConnectTimeout = 15; $b.ApplicationName = $Application
-    $b.PersistSecurityInfo = $false
-    if ($null -eq $Credential) { $b.IntegratedSecurity = $true }
-    else { $b.UserID = $Credential.UserName; $b.Password = $Credential.GetNetworkCredential().Password }
-    return $b.ConnectionString
+    if ([string]::IsNullOrWhiteSpace($SqlServer)) { throw 'SqlServer must not be empty.' }
+    if ([string]::IsNullOrWhiteSpace($Database)) { throw 'Database must not be empty.' }
+
+    # IMPORTANT: SqlConnectionStringBuilder implements IDictionary. In Windows PowerShell,
+    # `$builder.DataSource = ...` can be interpreted as dictionary-key assignment to
+    # "DataSource" instead of the .NET property DataSource. SqlClient does NOT recognize
+    # the keyword "DataSource". Index by the actual SqlClient connection-string keywords.
+    $b = New-Object System.Data.SqlClient.SqlConnectionStringBuilder
+    $b['Data Source'] = $SqlServer
+    $b['Initial Catalog'] = $Database
+    $b['Encrypt'] = $true
+    $b['TrustServerCertificate'] = $TrustServerCertificate
+    $b['Connect Timeout'] = 15
+    $b['Application Name'] = $Application
+    $b['Persist Security Info'] = $false
+    if ($null -eq $Credential) {
+        $b['Integrated Security'] = $true
+    } else {
+        $b['Integrated Security'] = $false
+        $b['User ID'] = $Credential.UserName
+        $b['Password'] = $Credential.GetNetworkCredential().Password
+    }
+    # ToString() is the canonical SqlConnectionStringBuilder serialization.
+    # Never print this value to the console: SQL-auth passwords may be present.
+    return $b.ToString()
 }
 function Open-SetupDatabase {
     param([string]$SqlServer,[string]$Database,[System.Management.Automation.PSCredential]$Credential,

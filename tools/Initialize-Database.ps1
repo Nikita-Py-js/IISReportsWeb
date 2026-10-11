@@ -29,8 +29,10 @@ try {
     if(-not $VerifyOnly) {
         if(-not $PSCmdlet.ShouldProcess("$SqlServer/$Database",'Apply idempotent ir3 schema; preserve existing data')) { return }
         Invoke-SqlFile -Connection $c -Path "$root\sql\001-v3-schema.sql"
+        Invoke-SqlFile -Connection $c -Path "$root\sql\005-auto-sources.sql"
     }
     Invoke-SqlFile -Connection $c -Path "$root\sql\003-v3-verify.sql" -ShowRows
     Invoke-SqlFile -Connection $c -Path "$root\sql\004-v3-defaults-audit.sql" -ShowRows
+    Invoke-SqlFile -Connection $c -Path "$root\sql\006-auto-sources-verify.sql" -ShowRows
     Write-Host 'Schema verification completed. Review default-constraint audit: all four rows must say OK.'
 } finally { $c.Dispose() }

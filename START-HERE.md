@@ -1,9 +1,10 @@
 # Начните здесь
 
-**Новая установка на сервере с IIS:** [docs/INSTALL.md](docs/INSTALL.md).
+Новая установка: [docs/INSTALL.md](docs/INSTALL.md).
 
-**Уже работающая v3:** [docs/UPGRADING.md](docs/UPGRADING.md).
+Обновление уже работающей версии: [docs/UPGRADING.md](docs/UPGRADING.md).
 
-Не публикуйте всю папку проекта в IIS. Для сайта нужен только `web/`; чистый установщик копирует его автоматически.
+Все локальные IIS-сайты обнаруживаются автоматически; вручную указывать ID и пути не требуется.
+Выбор импорта — флажки во вкладке «Источники», затем «Сохранить выбор».
 
-Требуются ASP.NET Framework 4.8, Windows Authentication и SQL Server. EXE собирается на Windows командой `tools/Build-And-Test.ps1`.
+Сначала распакуйте проект в `C:\Deploy\IISReports-3.1.0`, не в каталог веб-сайта.

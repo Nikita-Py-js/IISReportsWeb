@@ -3,7 +3,8 @@ param(
  [Parameter(Mandatory=$true)][string]$BuildDirectory,
  [Parameter(Mandatory=$true)][string]$ConfigFile,
  [string]$Destination='C:\Services\IISReportsAgentV3',
- [string[]]$LogRoots=@()
+ [string[]]$LogRoots=@(),
+ [switch]$SkipAutoDiscovery
 )
 $ErrorActionPreference='Stop'
 $name='IISReportsAgentV3';$account="NT SERVICE\$name"
@@ -40,5 +41,6 @@ foreach($path in $LogRoots){
         if($LASTEXITCODE -ne 0){throw "Cannot grant read rights on $path"}
     }else{Write-Warning "Log root does not exist: $path"}
 }
+if(-not $SkipAutoDiscovery) { & "$PSScriptRoot\Install-AutoDiscovery.ps1" -AgentDirectory $target }
 Write-Host 'Service created but NOT started. Provision SQL permissions first, then Start-Service IISReportsAgentV3.'
 Write-Host "Installed at $target. Protect this directory from ordinary users."

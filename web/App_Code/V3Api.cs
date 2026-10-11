@@ -25,7 +25,7 @@ namespace IISReports
     }
     public static class V3Api
     {
-        private static readonly HashSet<string> Writes=new HashSet<string>(new[]{"refresh","job-create","check-save","rule-save","incident-action","notification-test","notification-retry"},StringComparer.Ordinal);
+        private static readonly HashSet<string> Writes=new HashSet<string>(new[]{"refresh","job-create","check-save","rule-save","incident-action","notification-test","notification-retry","sources-save"},StringComparer.Ordinal);
         public static bool Handles(string action)
         {
             return Writes.Contains(action)||new[]{"whoami","csrf","health","diag","agent","sources","generations","jobs","checks","check-results","rules","incidents","incident-events","notifications","raw-event","parse-errors","audit"}.Contains(action);
@@ -55,6 +55,14 @@ namespace IISReports
                 if(action=="rules")return Store.Iso(Store.Rows(c,null,@"SELECT r.*,s.LastValue,s.LastSamples,s.LastEvaluatedUtc,s.LastMessage FROM ir3.AlertRules r LEFT JOIN ir3.AlertState s ON s.RuleId=r.Id ORDER BY r.Name"));
                 AccessControl.RequireEditor(ctx); // Operational paths/raw history and every write are operator-only.
                 if(action=="sources")return Sources(c);
+                if(action=="sources-save")
+                {
+                    var body=Body<SourcesEdit>(ctx);
+                    try { SourceSelection.Save(c,body.changes,AccessControl.Principal(ctx)); }
+                    catch(ArgumentException ex){throw new ApiFailure(400,"invalid_sources",ex.Message);}
+                    catch(SourceConflictException ex){throw new ApiFailure(409,"revision_conflict",ex.Message);}
+                    return new {ok=true,changed=body.changes.Length,message="Monitoring choice saved. Completed imports and historical data are retained."};
+                }
                 if(action=="generations")return Store.Iso(Store.Rows(c,null,@"SELECT g.*,CASE WHEN g.Id=f.ActiveGenerationId THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS IsActive
  FROM ir3.Generations g JOIN ir3.Files f ON f.Id=g.FileId WHERE g.FileId=@id ORDER BY g.Number DESC","@id",LongArg(ctx,"fileId")));
                 if(action=="jobs")return Store.Iso(Store.Rows(c,null,"SELECT TOP(100) * FROM ir3.Jobs ORDER BY RequestedUtc DESC"));
@@ -71,6 +79,11 @@ namespace IISReports
                     {
                         if(!long.TryParse(Value(body,"fileId"),out file)||file<1)throw new ApiFailure(400,"file_required","A registered fileId is required.");
                         if(Store.Long(Store.Scalar(c,null,"SELECT COUNT(*) FROM ir3.Files WHERE Id=@id","@id",file))!=1)throw new ApiFailure(404,"file_not_found","Registered file not found.");
+                        if(kind!="verify")
+                        {
+                            int sourceId=Store.Num(Store.Scalar(c,null,"SELECT SourceId FROM ir3.Files WHERE Id=@id","@id",file));
+                            if(!SourceSelection.CanImport(c,null,sourceId,false))throw new ApiFailure(409,"source_disabled","Enable this available source before replay/new-version jobs.");
+                        }
                     }
                     Guid id=Guid.NewGuid();
                     using(var tx=c.BeginTransaction())
@@ -120,14 +133,16 @@ namespace IISReports
                     long total=Store.Long(Store.Scalar(c,null,"SELECT COUNT_BIG(*) FROM ir3.CurrentRequests"));
                     double? age=agents.Count==0?(double?)null:(DateTime.UtcNow-DateTime.SpecifyKind((DateTime)agents[0]["HeartbeatUtc"],DateTimeKind.Utc)).TotalSeconds;
                     bool online=age.HasValue&&age.Value<120&&Store.Str(agents[0]["State"])!="stopped";
-                    long failures=Store.Long(Store.Scalar(c,null,"SELECT COUNT(*) FROM ir3.Sources WHERE Enabled=1 AND LastError IS NOT NULL"));
+                    long failures=Store.Long(Store.Scalar(c,null,"SELECT COUNT(*) FROM ir3.Sources WHERE Enabled=1 AND (AutoDiscovered=0 OR Available=1) AND LastError IS NOT NULL"));
                     long queued=Store.Long(Store.Scalar(c,null,"SELECT COUNT(*) FROM ir3.Jobs WHERE State IN('queued','running')"));
-                    bool agentWarning=agents.Count>0&&Store.Str(agents[0]["State"])=="warning";
+                    var discovery=Store.Rows(c,null,"SELECT * FROM ir3.DiscoveryState WHERE Id=1");
+                    bool discoveryWarning=discovery.Count==0 || Store.Str(discovery[0]["State"])=="error";
+                    bool agentWarning=(agents.Count>0&&Store.Str(agents[0]["State"])=="warning")||discoveryWarning;
                     string status=!online?"stale":failures>0||agentWarning?"warn":"ok";
                     // Endpoint is informative JSON; consumers must inspect healthy/status, not HTTP 200 alone.
-                    return new {status=status,healthy=online&&failures==0&&!agentWarning,version="3.0.2",dbConnected=true,schemaInitialized=true,
+                    return new {status=status,healthy=online&&failures==0&&!agentWarning,version="3.1.0",dbConnected=true,schemaInitialized=true,
                         databaseError=(string)null,totalEntries=total,dbEntries=total,agentOnline=online,heartbeatAgeSeconds=age,
-                        queuedJobs=queued,failedSources=failures,lastParsed=agents.Count==0?null:IsoDate(agents[0]["LastSuccessfulScanUtc"]),
+                        queuedJobs=queued,failedSources=failures,discoveryHealthy=!discoveryWarning,lastParsed=agents.Count==0?null:IsoDate(agents[0]["LastSuccessfulScanUtc"]),
                         errors=failures==0?new string[0]:new[]{"Some sources require attention. Open Sources."},
                         agent=detail?Store.Iso(agents):null,identity=detail?AccessControl.IdentityInfo(ctx):null,
                         storage="ir3.CurrentRequests; legacy dbo tables are retained but not combined",sources=detail?Store.Iso(Store.Rows(c,null,"SELECT * FROM ir3.Sources")):null};
@@ -136,21 +151,21 @@ namespace IISReports
             catch(Exception ex)
             {
                 ctx.Response.StatusCode=503;
-                return new{status="stale",healthy=false,version="3.0.2",dbConnected=false,schemaInitialized=false,
+                return new{status="stale",healthy=false,version="3.1.0",dbConnected=false,schemaInitialized=false,
                     databaseError=detail?ex.Message:"Database/schema unavailable. An operator can inspect action=diag.",security=AccessControl.IdentityInfo(ctx)};
             }
         }
         private static string IsoDate(object v){return v is DateTime?Settings.Utc((DateTime)v):null;}
         private static object Sources(SqlConnection c)
         {
-            var rows=Store.Rows(c,null,@"SELECT TOP(2000) f.Id AS fileId,f.FullPath AS path,s.SiteId AS siteId,f.Status AS status,
+            var rows=Store.Rows(c,null,@"SELECT TOP(2000) f.Id AS fileId,f.FullPath AS path,s.Id AS sourceId,s.Enabled AS monitoring,s.SiteId AS siteId,f.Status AS status,
  f.ObservedSize AS size,g.CommittedOffset AS position,g.Id AS generationId,g.Number AS generation,
  g.LastImportUtc AS lastParsed,g.LastVerifiedUtc AS verifiedUtc,g.VerificationStatus AS verification,
  f.LastError AS error,ISNULL(x.n,0) AS dbRows,ISNULL(x.bad,0) AS parseErrors
  FROM ir3.Files f JOIN ir3.Sources s ON s.Id=f.SourceId JOIN ir3.Generations g ON g.Id=f.ActiveGenerationId
  OUTER APPLY(SELECT COUNT_BIG(*) AS n,SUM(CASE WHEN ParseError IS NOT NULL THEN CONVERT(bigint,1) ELSE 0 END) AS bad FROM ir3.RawEvents WHERE GenerationId=g.Id)x
  ORDER BY f.Id");
-            return new {files=Store.Iso(rows),sources=Store.Iso(Store.Rows(c,null,"SELECT * FROM ir3.Sources")),
+            return new {files=Store.Iso(rows),sources=Store.Iso(Store.Rows(c,null,"SELECT * FROM ir3.Sources ORDER BY SiteId,Id")),discovery=Store.Iso(Store.Rows(c,null,"SELECT * FROM ir3.DiscoveryState WHERE Id=1")),
                 total=Store.Long(Store.Scalar(c,null,"SELECT COUNT_BIG(*) FROM ir3.Files")),shown=rows.Count,
                 integrityScope="Each scan checks first/last committed chunks; Verify hashes ALL committed chunks. New uncommitted bytes are not verified against a previous version."};
         }

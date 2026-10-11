@@ -139,6 +139,7 @@ namespace IISReports
 
         private static Range[] _ranges = new Range[0];
         private static DateTime _lastWrite = DateTime.MinValue;
+        private static DateTime _lastDbLoad = DateTime.MinValue;
         private static readonly object _lock = new object();
 
         public static void LoadIfChanged()
@@ -215,6 +216,7 @@ namespace IISReports
     {
         private static Dictionary<int, string> _map = new Dictionary<int, string>();
         private static DateTime _lastWrite = DateTime.MinValue;
+        private static DateTime _lastDbLoad = DateTime.MinValue;
         private static readonly object _lock = new object();
 
         public static void LoadIfChanged(bool force = false)
@@ -225,9 +227,19 @@ namespace IISReports
 
             lock (_lock)
             {
-                if (!force && lastWrite == _lastWrite && _map.Count > 0) return;
+                if (!force && lastWrite == _lastWrite && _map.Count > 0 && (DateTime.UtcNow-_lastDbLoad).TotalSeconds<30) return;
 
                 var dict = new Dictionary<int, string>();
+                try
+                {
+                    using(var connection=IISReports.V3.Store.Open())
+                    {
+                        var names=IISReports.V3.Store.Rows(connection,null,"SELECT SiteId,Name FROM ir3.Sources ORDER BY Available ASC,Id ASC");
+                        foreach(var row in names)dict[IISReports.V3.Store.Num(row["SiteId"])]=IISReports.V3.Store.Str(row["Name"]);
+                    }
+                    _lastDbLoad=DateTime.UtcNow;
+                }
+                catch { /* DB availability is reported separately by the API/health. */ }
                 try
                 {
                     if (File.Exists(path))

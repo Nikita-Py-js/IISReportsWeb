@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Data.SqlClient;
 using System.Text;
@@ -33,27 +33,36 @@ public static class SqlIntegrationTests
                 long gen=Store.Long(Store.Scalar(c,null,"SELECT ActiveGenerationId FROM ir3.Files WHERE Id=@f","@f",file));
                 Check(Count(c,"ir3.Requests",gen)==2,"equal-text rows retain distinct offsets");
                 engine.Scan(source);Check(Count(c,"ir3.Requests",gen)==2,"second scan does not duplicate");
+                SourceSelection.Save(c,new[]{new SourceChange{id=source,revision=1,enabled=false}},"integration-test");
+                File.AppendAllText(path,row,utf8);engine.Scan(source);
+                Check(Count(c,"ir3.Requests",gen)==2,"paused source does not import appended lines");
+                bool conflict=false;try{SourceSelection.Save(c,new[]{new SourceChange{id=source,revision=1,enabled=true}},"integration-test");}catch(SourceConflictException){conflict=true;}
+                Check(conflict&&!Store.Bool(Store.Scalar(c,null,"SELECT Enabled FROM ir3.Sources WHERE Id=@s","@s",source)),"stale revision cannot override source pause");
+                bool stopped=false;try{engine.ImportFile(file,true,0);}catch(SourcePausedException){stopped=true;}
+                Check(stopped&&Count(c,"ir3.Requests",gen)==2,"replay cannot bypass source pause");
+                SourceSelection.Save(c,new[]{new SourceChange{id=source,revision=2,enabled=true}},"integration-test");
+                engine.Scan(source);Check(Count(c,"ir3.Requests",gen)==3,"source resumes from saved offset exactly once");
                 File.AppendAllText(path,row.TrimEnd('\r','\n'),utf8);engine.Scan(source);
-                Check(Count(c,"ir3.Requests",gen)==2,"partial line deferred");
+                Check(Count(c,"ir3.Requests",gen)==3,"partial line deferred");
                 File.AppendAllText(path,"\r\n",utf8);engine.Scan(source);
-                Check(Count(c,"ir3.Requests",gen)==3,"partial line completed exactly once");
+                Check(Count(c,"ir3.Requests",gen)==4,"partial line completed exactly once");
                 File.AppendAllText(path,"malformed record\r\n",utf8);engine.Scan(source);
-                Check(Count(c,"ir3.RawEvents",gen)==4&&Count(c,"ir3.Requests",gen)==3,"parse failure retained in quarantine");
+                Check(Count(c,"ir3.RawEvents",gen)==5&&Count(c,"ir3.Requests",gen)==4,"parse failure retained in quarantine");
                 long oldOffset=Store.Long(Store.Scalar(c,null,"SELECT CommittedOffset FROM ir3.Generations WHERE Id=@g","@g",gen));
                 engine.Verify(file);long next;engine.ImportFile(file,true,0,oldOffset,out next);
-                Check(next==oldOffset&&Count(c,"ir3.Requests",gen)==3&&Count(c,"ir3.RawEvents",gen)==4,"replay is idempotent");
+                Check(next==oldOffset&&Count(c,"ir3.Requests",gen)==4&&Count(c,"ir3.RawEvents",gen)==5,"replay is idempotent");
                 File.SetLastWriteTimeUtc(path,DateTime.UtcNow.AddDays(-3));engine.Scan(source);
-                Check(Count(c,"ir3.Requests",gen)==3,"mtime-only change does not reject unchanged bytes");
+                Check(Count(c,"ir3.Requests",gen)==4,"mtime-only change does not reject unchanged bytes");
                 byte[] original=File.ReadAllBytes(path),changed=(byte[])original.Clone();changed[Encoding.UTF8.GetByteCount(header)+21]=(byte)'X';File.WriteAllBytes(path,changed);
                 bool detected=false;try{engine.Verify(file);}catch(InvalidDataException){detected=true;}
-                Check(detected&&Count(c,"ir3.Requests",gen)==3,"content change detected; committed history retained");
+                Check(detected&&Count(c,"ir3.Requests",gen)==4,"content change detected; committed history retained");
                 File.WriteAllBytes(path,original);engine.Verify(file);
                 Guid job=Guid.NewGuid();Store.Exec(c,null,"INSERT ir3.Jobs(Id,Kind,FileId,RequestedBy) VALUES(@id,'new-generation',@f,'integration-test')","@id",job,"@f",file);
                 engine.NewGeneration(file,job);engine.NewGeneration(file,job);
                 long newGen=Store.Long(Store.Scalar(c,null,"SELECT ActiveGenerationId FROM ir3.Files WHERE Id=@f","@f",file));
                 Check(newGen!=gen&&Store.Long(Store.Scalar(c,null,"SELECT COUNT(*) FROM ir3.Generations WHERE FileId=@f","@f",file))==2,"new generation is restart-idempotent");
                 engine.Scan(source);
-                Check(Count(c,"ir3.Requests",gen)==3&&Count(c,"ir3.Requests",newGen)==3&&Count(c,"ir3.CurrentRequests",gen)==0,"prior generation archived without double counting");
+                Check(Count(c,"ir3.Requests",gen)==4&&Count(c,"ir3.Requests",newGen)==4&&Count(c,"ir3.CurrentRequests",gen)==0,"prior generation archived without double counting");
                 Store.Exec(c,null,"UPDATE ir3.Jobs SET State='done',FinishedUtc=SYSUTCDATETIME() WHERE Id=@id","@id",job);
                 string key="test:"+Guid.NewGuid().ToString("N");incidentKey=key;
                 using(var tx=c.BeginTransaction()){Incidents.Observe(c,tx,key,"Test rollback","Must not persist",true);tx.Rollback();}

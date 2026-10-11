@@ -10,7 +10,7 @@ $ErrorActionPreference='Stop'
 $files=@(
  'index.html','Reports.ashx','v3.css','v3.js',
  'App_Code\Main.cs','App_Code\V3Api.cs','App_Code\Security.cs',
- 'App_Code\V3Core.cs','App_Code\V3Import.cs','App_Code\V3Monitoring.cs',
+ 'App_Code\V3Core.cs','App_Code\V3Import.cs','App_Code\V3Monitoring.cs','App_Code\V3Discovery.cs',
  'Web.config'
 )
 $files | ForEach-Object {
@@ -27,4 +27,8 @@ $service=Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
  SqlExposedUnderWebRoot=Test-Path -LiteralPath (Join-Path $WebRoot 'sql')
  AgentExposedUnderWebRoot=Test-Path -LiteralPath (Join-Path $WebRoot 'agent')
 } | Format-List
+if(Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue) {
+    Get-ScheduledTask -TaskName 'IISReports-DiscoverSites' -ErrorAction SilentlyContinue | Select-Object TaskName,State | Format-Table -AutoSize
+}
+[pscustomobject]@{InventorySnapshotPresent=Test-Path -LiteralPath (Join-Path $env:ProgramData 'IISReports\Discovery\sites.json')} | Format-List
 Write-Host 'No SQL connections, HTTP mutations, or filesystem changes were made.'

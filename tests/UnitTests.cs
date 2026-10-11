@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
 using IISReports;
@@ -60,6 +61,22 @@ public static class UnitTests
             Check(blocked,"empty host allowlist denies network destinations");
             using(var c=new SqlConnection())using(var q=Store.Command(c,null,"SELECT @t","@t",DateTime.UtcNow))
                 Check(q.Parameters[0].SqlDbType==SqlDbType.DateTime2&&q.Parameters[0].Scale==7,"SQL checkpoint time precision");
+            var snapshot=new InventorySnapshot { version=1,machineName="TESTNODE",success=true,generatedUtc=DateTime.UtcNow.ToString("o"),sites=new[]{
+                new InventorySite{siteId=1,name="Main",rootPath=@"C:\inetpub\logs\LogFiles\W3SVC1",available=true,status="ready"}}};
+            Check(SourceDiscovery.Validate(snapshot,"testnode",DateTime.UtcNow,600).Kind==DateTimeKind.Utc,"inventory validates machine and timestamp");
+            Check(SourceDiscovery.CanonicalRoot(@"c:/Logs/W3SVC1/\")==@"C:\LOGS\W3SVC1","inventory canonical path");
+            Check(Hashing.Equal(SourceDiscovery.Key("node",1,@"C:\Logs\W3SVC1"),SourceDiscovery.Key("NODE",1,@"c:\logs\w3svc1\")),"discovery key ignores Windows path case and trailing slash");
+            Check(!Hashing.Equal(SourceDiscovery.Key("node",1,@"C:\Logs\W3SVC1"),SourceDiscovery.Key("node",2,@"C:\Logs\W3SVC1")),"discovery key distinguishes sites");
+            bool denied=false;try{SourceDiscovery.Validate(snapshot,"other",DateTime.UtcNow,600);}catch(InvalidDataException){denied=true;}Check(denied,"wrong-machine inventory denied");
+            denied=false;try{SourceDiscovery.Validate(snapshot,"testnode",DateTime.UtcNow.AddHours(1),600);}catch(InvalidDataException){denied=true;}Check(denied,"stale inventory denied without removing sources");
+            snapshot.success=false;denied=false;try{SourceDiscovery.Validate(snapshot,"testnode",DateTime.UtcNow,600);}catch(InvalidDataException){denied=true;}Check(denied,"failed inventory denied");snapshot.success=true;
+            var one=snapshot.sites[0];snapshot.sites=new[]{one,one};denied=false;try{SourceDiscovery.Validate(snapshot,"testnode",DateTime.UtcNow,600);}catch(InvalidDataException){denied=true;}Check(denied,"duplicate IIS site ids rejected");snapshot.sites=new[]{one};
+            one.rootPath=@"\\fileserver\share\W3SVC1";denied=false;try{SourceDiscovery.Validate(snapshot,"testnode",DateTime.UtcNow,600);}catch(InvalidDataException){denied=true;}Check(denied,"UNC cannot be automatically marked available");
+            denied=false;try{SourceDiscovery.CanonicalRoot(@"C:\logs\..\W3SVC1");}catch(ArgumentException){denied=true;}Check(denied,"traversal in inventory path denied");
+            var changes=SourceSelection.Validate(new[]{new SourceChange{id=2,revision=1,enabled=true},new SourceChange{id=1,revision=1,enabled=false}});
+            Check(changes[0].id==1&&!changes[0].enabled.Value,"source writes sorted and explicit false preserved");
+            denied=false;try{SourceSelection.Validate(new[]{new SourceChange{id=1,revision=1}});}catch(ArgumentException){denied=true;}Check(denied,"missing enabled is not silently false");
+            denied=false;try{SourceSelection.Validate(new[]{changes[0],changes[0]});}catch(ArgumentException){denied=true;}Check(denied,"duplicate checkbox ids rejected");
             Console.WriteLine("PASS TOTAL "+passed);return 0;
         }
         catch(Exception ex){Console.Error.WriteLine("FAIL "+ex);return 1;}

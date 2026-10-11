@@ -101,15 +101,102 @@ async function loadAlerts() {
   const rows=await api('rules',null,{noSite:true});v3Cache.rules=rows;
   v3Table('rules-table',rows,[['\u041f\u0440\u0430\u0432\u0438\u043b\u043e','Name'],['\u0412\u043a\u043b.',r=>esc(r.Enabled)],['\u041c\u0435\u0442\u0440\u0438\u043a\u0430','Metric'],['\u041f\u043e\u0440\u043e\u0433','Threshold'],['\u041e\u043a\u043d\u043e, \u043c\u0438\u043d','WindowMinutes'],['\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435','LastValue'],['\u0412\u044b\u0431\u043e\u0440\u043a\u0430','LastSamples'],['\u0420\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442','LastMessage'],['',r=>accessInfo.canEdit?v3Button('edit-rule',r.Id,'Edit'):'']]);
 }
-async function loadSources() {
-  const x=await api('sources',null,{noSite:true});sourcesSnapshot=x.files||[];
-  $('sources-summary').textContent=`Files: ${x.total}; shown: ${x.shown}. ${x.integrityScope}`;
-  $('source-roots').textContent=(x.sources||[]).map(r=>`${r.Name}: ${r.RootPath}${r.LastError?' | '+r.LastError:''}`).join('\n');
-  $('sources-body').innerHTML=sourcesSnapshot.map(r=>`<tr>
-    <td class="mono">${esc(r.path)}<br><span class="v3-problem">${esc(r.error)}</span></td><td>${r.generation}</td><td>${esc(r.status)}</td>
-    <td>${num(r.position)} / ${num(r.size)}</td><td>${num(r.dbRows)} / ${num(r.parseErrors)}</td><td>${esc(r.verification||'\u2014')}<br>${fmt(r.verifiedUtc)}</td>
-    <td>${v3Button('verify',r.fileId,'Verify')}${v3Button('replay',r.fileId,'Replay')}${v3Button('generations',r.fileId,'Versions')}${v3Button('new-generation',r.fileId,'New version')}</td></tr>`).join('')||emptyRow(7);
+
+const sourceSettings = { rows: [], draft: new Map(), busy: false, loadSequence: 0 };
+const discoveryLabels = {
+  ready:'Готов', logging_disabled:'Журналирование в IIS выключено',
+  waiting_directory:'Ожидание каталога журналов', path_or_acl_error:'Путь или права доступа',
+  central_unsupported:'Централизованные логи не поддерживаются', format_unsupported:'Нужен формат W3C',
+  etw_only:'Нет записи W3C в файл', not_in_iis:'Удалён из IIS / путь изменён'
+};
+function visibleSourceRows() {
+  const q=$('source-search').value.trim().toLocaleLowerCase();
+  return sourceSettings.rows.filter(r=>!q || `${r.Name} ${r.IisName||''} ${r.SiteId} ${r.RootPath}`.toLocaleLowerCase().includes(q));
 }
+function renderSourceSettings() {
+  const rows=visibleSourceRows();
+  const draft=sourceSettings.draft;
+  $('sources-save').disabled=sourceSettings.busy || !draft.size;
+  $('sources-enable-visible').disabled=sourceSettings.busy || !rows.length;
+  $('sources-disable-visible').disabled=sourceSettings.busy || !rows.length;
+  $('sources-reload').disabled=sourceSettings.busy;
+  $('source-selection-status').textContent=
+    `Источников: ${sourceSettings.rows.length}; видно: ${rows.length}; включено в базе: ${sourceSettings.rows.filter(r=>r.Enabled).length}. `+
+    (draft.size?`Несохранённых изменений: ${draft.size}.`:'Выбор сохранён в MSSQL.');
+  $('source-roots').innerHTML='<table><thead><tr><th>Мониторить</th><th>Сайт / ID</th><th>Каталог</th><th>Состояние</th><th>Последний импорт UTC</th></tr></thead><tbody>'+
+    (rows.map(r=>{
+      const checked=draft.has(r.Id)?draft.get(r.Id):Boolean(r.Enabled);
+      const available=!r.AutoDiscovered || r.Available;
+      const title=(discoveryLabels[r.DiscoveryStatus]||r.DiscoveryStatus||'Ручной источник');
+      return `<tr class="${draft.has(r.Id)?'source-dirty':''}">
+        <td><input type="checkbox" data-source-id="${Number(r.Id)}" aria-label="Мониторить ${esc(r.Name)}" ${checked?'checked':''} ${sourceSettings.busy?'disabled':''}></td>
+        <td><b>${esc(r.Name)}</b><br><span class="hint">ID ${Number(r.SiteId)}${r.IisName&&r.IisName!==r.Name?' · IIS: '+esc(r.IisName):''}</span></td>
+        <td class="mono">${esc(r.RootPath)}</td>
+        <td><span class="badge ${r.Enabled&&available?'ok':'warn'}">${r.Enabled?(available?'Импорт включён':'Включён, ожидает источник'):'Импорт на паузе'}</span>
+          <div class="hint">${esc(title)}</div><div class="v3-problem">${esc(r.DiscoveryMessage||'')}</div>
+          <div class="v3-problem">${esc(r.LastError||'')}</div></td>
+        <td>${fmt(r.LastScanUtc)}</td></tr>`;
+    }).join('')||emptyRow(5))+'</tbody></table>';
+}
+function stageSource(id,value) {
+  const row=sourceSettings.rows.find(r=>r.Id===id);
+  if(!row || sourceSettings.busy)return;
+  if(Boolean(row.Enabled)===value)sourceSettings.draft.delete(id);else sourceSettings.draft.set(id,value);
+}
+async function saveSourceSettings() {
+  if(sourceSettings.busy||!sourceSettings.draft.size)return;
+  if(!accessInfo.canEdit)throw new Error('Требуются права редактора.');
+  const changes=[...sourceSettings.draft].map(([id,enabled])=>({id,enabled,revision:Number(sourceSettings.rows.find(r=>r.Id===id).Revision)}));
+  if(changes.length>1000){showError(new Error('Сохраните не более 1000 источников за один раз; используйте фильтр.'));return;}
+  sourceSettings.busy=true;renderSourceSettings();
+  try {
+    await api('sources-save',null,{noSite:true,method:'POST',body:{changes}});
+    sourceSettings.draft.clear();clearError();
+    flash('Выбор сохранён. История не удаляется.');
+    await loadSources();
+  } catch(error) {
+    if(error.code==='revision_conflict') {
+      sourceSettings.draft.clear();
+      await loadSources();
+      showError(new Error('Выбор изменён в другой сессии. Список обновлён; повторите нужные изменения.'));
+    } else showError(error);
+  } finally {sourceSettings.busy=false;renderSourceSettings();}
+}
+async function loadSources() {
+  const sequence=++sourceSettings.loadSequence;
+  const x=await api('sources',null,{noSite:true});
+  if(sequence!==sourceSettings.loadSequence)return;
+  // Never overwrite unsaved checkbox edits during a periodic refresh.
+  if(!sourceSettings.draft.size)sourceSettings.rows=x.sources||[];
+  sourcesSnapshot=x.files||[];
+  const d=(x.discovery||[])[0];
+  $('discovery-state').textContent=d
+    ? `Обнаружение: ${d.State==='ok'?'работает':d.State}. Снимок IIS: ${fmt(d.SnapshotUtc)}. Сайтов: ${d.SitesFound??0}. ${d.LastError||''}`
+    : 'Ожидание первого снимка IIS. Проверьте задачу IISReports-DiscoverSites и службу агента.';
+  $('discovery-state').className=!d||d.State==='error'?'v3-problem':'hint';
+  renderSourceSettings();
+  $('sources-summary').textContent=`Файлов: ${x.total}; показано: ${x.shown}. Проверка целостности не удаляет историю.`;
+  $('sources-body').innerHTML=sourcesSnapshot.map(r=>{
+    const source=sourceSettings.rows.find(s=>s.Id===r.sourceId);
+    const canImport=source&&source.Enabled&&(!source.AutoDiscovered||source.Available);
+    return `<tr>
+    <td class="mono">${esc(r.path)}<br><span class="v3-problem">${esc(r.error)}</span></td><td>${r.generation}</td><td>${esc(r.status)}</td>
+    <td>${num(r.position)} / ${num(r.size)}</td><td>${num(r.dbRows)} / ${num(r.parseErrors)}</td><td>${esc(r.verification||'—')}<br>${fmt(r.verifiedUtc)}</td>
+    <td>${v3Button('verify',r.fileId,'Verify')}${canImport?v3Button('replay',r.fileId,'Replay'):''}${v3Button('generations',r.fileId,'Versions')}${canImport?v3Button('new-generation',r.fileId,'New version'):''}</td></tr>`;
+  }).join('')||emptyRow(7);
+}
+$('source-search').addEventListener('input',renderSourceSettings);
+$('source-roots').addEventListener('change',event=>{
+  const box=event.target.closest('[data-source-id]');
+  if(box){stageSource(Number(box.dataset.sourceId),box.checked);renderSourceSettings();}
+});
+$('sources-save').addEventListener('click',()=>saveSourceSettings().catch(showError));
+$('sources-reload').addEventListener('click',async()=>{
+  if(sourceSettings.draft.size&&!confirm('Отменить несохранённый выбор и перечитать список?'))return;
+  sourceSettings.draft.clear();try{await loadSources();}catch(error){showError(error);}
+});
+$('sources-enable-visible').addEventListener('click',()=>{visibleSourceRows().forEach(r=>stageSource(r.Id,true));renderSourceSettings();});
+$('sources-disable-visible').addEventListener('click',()=>{visibleSourceRows().forEach(r=>stageSource(r.Id,false));renderSourceSettings();});
 async function loadV3Tab(name) {
   if(name==='access') {
     // Own identity is available even before role authorization succeeds.
@@ -176,6 +263,7 @@ document.addEventListener('click',async event=>{
     try {
       await loadHealth();const active=document.querySelector('#tabs button.active')?.dataset.tab;
       if(active==='overview'){await loadSites();await loadOverview();}
+      else if(active==='sources'&&!sourceSettings.busy&&!sourceSettings.draft.size)await loadSources();
       else if(['agent','incidents','queue'].includes(active))await loadV3Tab(active);
     }catch(error){showError(error);}
   },30000);

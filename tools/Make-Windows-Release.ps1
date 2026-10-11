@@ -28,7 +28,7 @@ foreach($relative in $manifest){
     [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($to))
     Copy-Item -LiteralPath $from -Destination $to
 }
-foreach($name in @('IISReports.Agent.exe','IISReports.WebCore.dll','IISReports.HandlerTest.dll','UnitTests.exe','SqlIntegrationTests.exe','BUILDINFO.json')){
+foreach($name in @('IISReports.Agent.exe','IISReports.WebCore.dll','IISReports.HandlerTest.dll','UnitTests.exe','SqlIntegrationTests.exe','DiscoverySqlTests.exe','BUILDINFO.json')){
     Copy-Item -LiteralPath (Join-Path $build $name) -Destination (Join-Path $stage ('build\'+$name))
 }
 $sumLines=@(Get-ChildItem -LiteralPath $stage -Recurse -File | Where-Object {$_.Name -ne 'SHA256SUMS.txt'} | Sort-Object FullName | ForEach-Object {

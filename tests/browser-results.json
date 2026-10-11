@@ -114,6 +114,58 @@
       "status": "PASS"
     },
     {
+      "test": "monitoring checkboxes for every source including no-log site",
+      "status": "PASS"
+    },
+    {
+      "test": "source names are HTML escaped",
+      "status": "PASS"
+    },
+    {
+      "test": "checkbox edits are not sent before Save",
+      "status": "PASS"
+    },
+    {
+      "test": "refresh preserves unsaved source choice",
+      "status": "PASS"
+    },
+    {
+      "test": "source save sends explicit false revision and CSRF",
+      "status": "PASS"
+    },
+    {
+      "test": "source pause survives server reload",
+      "status": "PASS"
+    },
+    {
+      "test": "saved state has no pending changes",
+      "status": "PASS"
+    },
+    {
+      "test": "paused source cannot request replay from UI",
+      "status": "PASS"
+    },
+    {
+      "test": "bulk selection applies only to visible rows",
+      "status": "PASS"
+    },
+    {
+      "test": "bulk save does not change hidden sources",
+      "status": "PASS"
+    },
+    {
+      "test": "revision conflict reloads server state without false success",
+      "status": "PASS"
+    },
+    {
+      "test": "source save failure preserves draft for retry",
+      "status": "PASS"
+    },
+    {
+      "test": "re-enable persists monitoring and restores replay action",
+      "status": "PASS"
+    },
+    {
       "test": "reader cannot see write controls",
       "status": "PASS"
     },
@@ -126,6 +178,6 @@
       "status": "PASS"
     }
   ],
-  "passed": 31,
+  "passed": 44,
   "browserErrors": []
 }

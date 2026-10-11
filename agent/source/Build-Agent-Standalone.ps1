@@ -1,4 +1,4 @@
-﻿# Windows PowerShell 5.1, .NET Framework 4.8. Build the agent from the FOUR source files in this folder.
+﻿# Windows PowerShell 5.1, .NET Framework 4.8. Build the agent from the FIVE source files in this folder.
 [CmdletBinding()]
 param([string]$OutputDirectory='')
 $ErrorActionPreference='Stop'
@@ -8,7 +8,7 @@ if(-not(Test-Path -LiteralPath $dir)){New-Item -ItemType Directory -Path $dir -F
 $csc=Join-Path $env:windir 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if(-not(Test-Path -LiteralPath $csc)){$csc=Join-Path $env:windir 'Microsoft.NET\Framework\v4.0.30319\csc.exe'}
 if(-not(Test-Path -LiteralPath $csc)){throw '.NET Framework 4.8 C# compiler not found.'}
-$files=@('Program.cs','V3Core.cs','V3Import.cs','V3Monitoring.cs')|ForEach-Object{Join-Path $PSScriptRoot $_}
+$files=@('Program.cs','V3Core.cs','V3Import.cs','V3Monitoring.cs','V3Discovery.cs')|ForEach-Object{Join-Path $PSScriptRoot $_}
 foreach($file in $files){if(-not(Test-Path -LiteralPath $file)){throw "Missing: $file"}}
 $output=Join-Path $dir 'IISReports.Agent.exe'
 & $csc /nologo /langversion:5 /optimize+ /warn:4 /utf8output /target:exe `

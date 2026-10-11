@@ -27,6 +27,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="..\web\App_Code\V3Discovery.cs"><Link>V3Discovery.cs</Link></Compile>
     <Compile Include="..\web\App_Code\V3Core.cs"><Link>Shared\V3Core.cs</Link></Compile>
     <Compile Include="..\web\App_Code\V3Import.cs"><Link>Shared\V3Import.cs</Link></Compile>
     <Compile Include="..\web\App_Code\V3Monitoring.cs"><Link>Shared\V3Monitoring.cs</Link></Compile>

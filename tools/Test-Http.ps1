@@ -27,6 +27,7 @@ function Send-Request {
         [Parameter(Mandatory=$true)] [string] $Action,
         [ValidateSet('GET','POST')] [string] $Method = 'GET',
         [hashtable] $Headers = @{},
+        [string] $JsonBody = '{}',
         [switch] $WithoutCookies
     )
     $url = [uri]($base + 'Reports.ashx?action=' + [uri]::EscapeDataString($Action))
@@ -45,7 +46,7 @@ function Send-Request {
         $req.Headers[[string]$headerName] = [string]$Headers[$headerName]
     }
     if ($Method -eq 'POST') {
-        $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes('{}')
+        $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($JsonBody)
         $req.ContentType = 'application/json; charset=utf-8'
         $req.ContentLength = $bodyBytes.Length
         $bodyStream = $req.GetRequestStream()
@@ -147,6 +148,17 @@ Require-Response -Name 'Missing CSRF cookie denied' -Result (
     } -WithoutCookies
 ) -Status 403 -ApiCode 'csrf_missing'
 
+# Source selection writes use the same authorization/CSRF guard; no source changes are sent.
+Require-Response -Name 'Source choices require CSRF' -Result (
+    Send-Request -Action 'sources-save' -Method 'POST' -JsonBody '{"changes":[]}' -Headers @{ 'Origin'=$origin }
+) -Status 403 -ApiCode 'csrf_missing'
+Require-Response -Name 'Empty source change set is rejected' -Result (
+    Send-Request -Action 'sources-save' -Method 'POST' -JsonBody '{"changes":[]}' -Headers @{
+        'Origin'=$origin;
+        'X-IISReports-CSRF'=[string]$csrf.Data.token
+    }
+) -Status 400 -ApiCode 'invalid_sources'
+
 if ($QueueScan) {
     Require-Response -Name 'Valid POST queues scan' -Result (
         Send-Request -Action 'refresh' -Method 'POST' -Headers @{
@@ -155,4 +167,4 @@ if ($QueueScan) {
         }
     ) -Status 202
 }
-Write-Host 'DONE: CSRF smoke tests complete. No valid state-changing POST was sent unless -QueueScan was used.'
+Write-Host 'DONE: CSRF smoke tests complete. No source selections were changed; no valid mutation was sent unless -QueueScan was used.'

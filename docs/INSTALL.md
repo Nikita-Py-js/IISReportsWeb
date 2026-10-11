@@ -1,4 +1,4 @@
-# Чистая установка IIS Reports 3.0.2
+# Чистая установка IIS Reports 3.1.0
 
 [← README](../README.md) · [Требования](PREREQUISITES.md)
 
@@ -8,10 +8,10 @@
 
 ## 0. Выберите имена и пути
 
-Распакуйте архив так, чтобы существовал `C:\Deploy\IISReports-3.0.2\tools`.
+Распакуйте архив так, чтобы существовал `C:\Deploy\IISReports-3.1.0\tools`.
 
 ```text
-C:\Deploy\IISReports-3.0.2\           исходники / установка
+C:\Deploy\IISReports-3.1.0\           исходники / установка
 C:\Deploy\IISReports-config\         подготовленные закрытые конфиги
 C:\inetpub\wwwroot\IISReportsV3\     только сайт
 C:\Services\IISReportsAgentV3\       EXE + конфиг службы + её logs
@@ -21,7 +21,7 @@ C:\Services\IISReportsAgentV3\       EXE + конфиг службы + её logs
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$pkg = 'C:\Deploy\IISReports-3.0.2'
+$pkg = 'C:\Deploy\IISReports-3.1.0'
 $configDir = 'C:\Deploy\IISReports-config'
 $webRoot = 'C:\inetpub\wwwroot\IISReportsV3'
 $agentRoot = 'C:\Services\IISReportsAgentV3'
@@ -41,10 +41,7 @@ $certThumbprint = 'REPLACE_WITH_CERTIFICATE_THUMBPRINT'
 # True допустим только как осознанное исключение для локального стенда.
 $trustSqlCertificate = $false
 
-# ID и путь анализируемого сайта. Это НЕ автоматически ID самой панели.
-$sourceSiteId = 1
-$sourceName = 'Main website'
-$logRoot = 'C:\inetpub\logs\LogFiles\W3SVC1'
+# Источники не перечисляются вручную. Все локальные сайты IIS обнаруживаются автоматически.
 ```
 
 Узнать реальные IIS-сайты:
@@ -93,12 +90,15 @@ build\IISReports.WebCore.dll
 build\IISReports.HandlerTest.dll
 build\UnitTests.exe
 build\SqlIntegrationTests.exe
+build\DiscoverySqlTests.exe
 build\BUILDINFO.json
 ```
 
 **Не копируйте тестовые DLL в `web\Bin`.** ASP.NET компилирует те же классы из `App_Code`; двойная публикация приведёт к конфликтам типов.
 
 ## 3. Создайте базу и схему
+
+Если при работе со старым дистрибутивом появлялась ошибка `Keyword not supported: DataSource`, используйте этот выпуск и [инструкцию исправления](HOTFIX-SQL-CONNECTION.md).
 
 SSMS/sqlcmd на сервере не требуются:
 
@@ -108,12 +108,13 @@ $dbArgs = @{
     Database = $db
     TrustServerCertificate = $trustSqlCertificate
 }
+& "$pkg\tools\Test-SqlConnectionBuilder.ps1"
 & "$pkg\tools\Initialize-Database.ps1" @dbArgs -CreateDatabase
 ```
 
-`-CreateDatabase` разрешает создание новой базы; существующая база не удаляется. SQL-схема создаётся транзакционно; таблицы `dbo` не трогаются. В конце должны присутствовать 18 таблиц `ir3`, `ir3.CurrentRequests`, роли `ir3_web`/`ir3_agent`; четыре строки аудита DEFAULT должны иметь `OK`.
+`-CreateDatabase` разрешает создание новой базы; существующая база не удаляется. SQL-схема создаётся транзакционно; таблицы `dbo` не трогаются. В конце должны присутствовать 19 таблиц `ir3`, `ir3.CurrentRequests`, роли `ir3_web`/`ir3_agent`; четыре строки аудита DEFAULT должны иметь `OK`.
 
-Новая установка **не создаёт фиктивные источники W3SVC1–3**. Их добавим на шаге 7.
+Новая установка **не создаёт фиктивные источники W3SVC1–3**. После запуска агент зарегистрирует реальный список сайтов из снимка IIS. Скрипт применяет `001-v3-schema.sql` и затем `005-auto-sources.sql`; ожидаемая версия схемы — **310**.
 
 Для уже созданной базы только проверить:
 
@@ -211,12 +212,15 @@ $agentInstall = @{
     BuildDirectory = "$pkg\build"
     ConfigFile = "$configDir\agent-local.config"
     Destination = $agentRoot
-    LogRoots = @($logRoot)
 }
 & "$pkg\tools\Install-Agent.ps1" @agentInstall
 
 Get-Service IISReportsAgentV3
 ```
+
+Установщик также создаёт задачу **`IISReports-DiscoverSites`**: при старте Windows и раз в минуту она читает конфигурацию IIS, публикует защищённый список сайтов и выдаёт службе чтение найденных W3C-каталогов. Скрипт задания хранится вне сайта, в `%ProgramData%\IISReports\Discovery`, и недоступен агенту на запись. Задание не подключается к SQL и не меняет настройки журналирования IIS.
+
+Каталоги, которых ещё нет, не создаются: когда IIS создаст их сам, следующий проход обнаружит их и настроит чтение. Папки с junction/symlink и UNC не получают автоматических прав.
 
 Ожидается `Stopped`. Если служба уже существует — используйте [обновление](UPGRADING.md), не переустанавливайте её для обхода ошибки.
 
@@ -229,36 +233,31 @@ Get-Service IISReportsAgentV3
 
 Этот шаг подходит только для SQL на той же машине. Он не выдаёт `db_owner` и `sysadmin`. Для удалённого SQL — [DATABASE.md](DATABASE.md).
 
-## 7. Зарегистрируйте настоящие источники журналов
+## 7. Проверьте автоматическое обнаружение
 
-Для каждого анализируемого сайта выполните:
-
-```powershell
-$sourceArgs = @{
-    SiteId = $sourceSiteId
-    Name = $sourceName
-    RootPath = $logRoot
-}
-& "$pkg\tools\Register-LogSource.ps1" @dbArgs @sourceArgs
-```
-
-Каталог должен существовать. Убедитесь, что в нём есть W3C `.log` с заголовками `#Fields:`. Скрипт не меняет настройки логирования IIS и не разрешает регистрацию перекрывающихся корней.
-
-Для дополнительных источников повторите регистрацию и выдайте чтение службе:
+Не запускайте `Register-LogSource.ps1` или `Register-All-IISSites.ps1` для обычной установки. Переменные `$sourceSiteId`, `$sourceName`, `$logRoot` не нужны.
 
 ```powershell
-& icacls.exe $logRoot /grant 'NT SERVICE\IISReportsAgentV3:(OI)(CI)(RX)' /T
-if ($LASTEXITCODE -ne 0) { throw 'Не удалось выдать чтение журналов.' }
+Get-ScheduledTask -TaskName 'IISReports-DiscoverSites'
+Get-ScheduledTaskInfo -TaskName 'IISReports-DiscoverSites'
+
+$inventoryFile = Join-Path $env:ProgramData 'IISReports\Discovery\sites.json'
+$inventory = Get-Content -LiteralPath $inventoryFile -Raw -Encoding UTF8 | ConvertFrom-Json
+$inventory | Select-Object success, machineName, generatedUtc, error
+$inventory.sites | Format-Table siteId, name, available, status, rootPath -AutoSize
 ```
 
-Название в селекторе и аналитических таблицах задаётся отдельно:
+Ожидается `success=True`. Статус `waiting_directory` допустим для нового сайта без файла журнала. `available=False` не удаляет сайт из списка и не стирает историю. При `path_or_acl_error`, `format_unsupported`, `central_unsupported` сначала проверьте причину в `message`.
+
+Первый снимок создаётся во время установки. После запуска Windows-служба читает его, регистрирует источники в MSSQL и начинает импорт. Новые сайты по умолчанию включены, в том числе сайт самой панели. Исключить панель можно флажком во вкладке «Источники».
+
+Если установка задачи была прервана, после исправления причины повторите **при остановленной службе**:
 
 ```powershell
-& "$pkg\tools\Set-IISReportsSiteDisplayName.ps1" `
-    -WebRoot $webRoot -SiteId $sourceSiteId -DisplayName $sourceName
+& "$pkg\tools\Install-AutoDiscovery.ps1" -AgentDirectory $agentRoot
 ```
 
-Не включайте саму панель в источники без необходимости: её собственные запросы и обновления тоже попадут в статистику.
+Это не переустанавливает службу и не пересоздаёт базу. Настройка по умолчанию — одна задача обнаружения и один агент на один IIS-сервер/БД.
 
 ## 8. Проверьте пользователя, токен и SQL
 
@@ -321,3 +320,18 @@ Get-Service IISReportsAgentV3
 - [ ] Все отрицательные CSRF-тесты прошли.
 - [ ] Агент работает; реальные записи импортированы; ошибки разобраны.
 - [ ] HTTPS, firewall/VPN и резервное копирование настроены.
+
+## 11. Выберите сайты в браузере
+
+Откройте «Источники» → «Какие сайты мониторить».
+
+1. По умолчанию все впервые обнаруженные сайты включены.
+2. Снимите флажки у ненужных сайтов.
+3. Нажмите **«Сохранить выбор»**. До нажатия кнопки изменение только локальное.
+4. Для массового изменения используйте поиск и «Включить видимые» / «Отключить видимые», затем сохраните.
+
+Отключение — **пауза импорта**, а не удаление SQL-строк и не отключение Logging в IIS. Сохранённая история остаётся в аналитике. После включения агент дочитает накопившиеся доступные строки, а не только строки после момента включения.
+
+Новый сайт, добавленный в IIS позднее, тоже включается по умолчанию. Массовая кнопка действует только на уже показанный список; это не запрет на будущие сайты.
+
+Подробная семантика, ограничения и проверка: [AUTO-SOURCES.md](AUTO-SOURCES.md).

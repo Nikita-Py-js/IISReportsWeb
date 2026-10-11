@@ -85,7 +85,7 @@ namespace IISReports.V3
         public static void CheckSchema(SqlConnection c)
         {
             object version = Scalar(c, null, "IF OBJECT_ID('ir3.SchemaVersions','U') IS NOT NULL SELECT MAX(Version) FROM ir3.SchemaVersions;");
-            if (Long(version) != 300) throw new InvalidOperationException("Run sql/001-v3-schema.sql in the selected database (expected schema 300).");
+            if (Long(version) != 310) throw new InvalidOperationException("Run tools/Initialize-Database.ps1, including sql/005-auto-sources.sql (expected schema 310).");
         }
         public static DateTime? LastImport()
         {

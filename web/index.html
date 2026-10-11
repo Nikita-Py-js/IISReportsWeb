@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>IIS Reports v3.0.2</title>
+<title>IIS Reports v3.1.0</title>
 <style>
   :root{--bg:#f5f7fa;--card:#fff;--text:#1f2937;--muted:#6b7280;--ok:#059669;
         --warn:#d97706;--err:#dc2626;--blue:#3b82f6;--violet:#6366f1;--border:#eef1f5}
@@ -110,7 +110,7 @@
 </head>
 <body>
 
-<h1>IIS Reports v3.0.2 <span id="health" class="health-dot" title="Проверка…"></span></h1>
+<h1>IIS Reports v3.1.0 <span id="health" class="health-dot" title="Проверка…"></span></h1>
 <div class="subtitle" id="subtitle">Загрузка…</div>
 
 <pre id="api-error" hidden role="alert" style="white-space:pre-wrap;overflow-wrap:anywhere;padding:14px;border:1px solid var(--err);border-radius:8px"></pre>
@@ -229,10 +229,31 @@
    <div class="section-scroll"><table><thead><tr><th>Метрика</th><th>Предыдущий</th><th>Текущий</th><th>Изменение</th></tr></thead><tbody id="compare-body"></tbody></table></div>
   </section>
 </div>
-<div id="tab-sources" hidden><section><h2>Источники и целостность</h2>
-<div class="hint">Проверка SHA-256 всех зафиксированных блоков запускается кнопкой Verify. Новая версия файла не удаляет старую.</div>
-<button onclick="loadSources()">Обновить</button> <button class="ghost" data-v3-action="parse-errors">Ошибки парсинга</button>
-<div id="sources-summary" class="hint"></div><div id="source-roots"></div><div class="section-scroll"><table><thead><tr><th>Файл</th><th>Версия</th><th>Статус</th><th>Позиция / байт</th><th>Строк / ошибок</th><th>Проверка</th><th>Действия</th></tr></thead><tbody id="sources-body"></tbody></table></div></section></div>
+<div id="tab-sources" hidden>
+<section>
+  <h2>Какие сайты мониторить</h2>
+  <p class="hint">Новые локальные сайты IIS обнаруживаются автоматически и включаются по умолчанию.
+  Снятие флажка останавливает импорт, но сохраняет историю и контрольные точки. Нажмите «Сохранить выбор».</p>
+  <div id="discovery-state" role="status"></div>
+  <div class="toolbar">
+    <input id="source-search" type="search" placeholder="Поиск по сайту, ID или каталогу" aria-label="Поиск источников">
+    <button type="button" id="sources-enable-visible">Включить видимые</button>
+    <button type="button" class="ghost" id="sources-disable-visible">Отключить видимые</button>
+    <button type="button" id="sources-save" disabled>Сохранить выбор</button>
+    <button type="button" class="ghost" id="sources-reload">Обновить список / отменить выбор</button>
+  </div>
+  <div id="source-selection-status" class="hint" aria-live="polite"></div>
+  <div id="source-roots" class="section-scroll"></div>
+</section>
+<section><h2>Файлы, контрольные точки и целостность</h2>
+  <p class="hint">Все новые и ротированные .log-файлы включённых источников импортируются агентом.
+  Verify проверяет SHA-256 всех сохранённых блоков. Replay и New version доступны только для включённого доступного источника.
+  Пауза не отключает запись журналов в IIS и не меняет правила алертов.</p>
+  <button class="ghost" data-v3-action="parse-errors">Ошибки парсинга</button>
+  <div id="sources-summary" class="hint"></div>
+  <div class="section-scroll"><table><thead><tr><th>Файл</th><th>Версия</th><th>Статус</th><th>Позиция / байт</th><th>Строк / ошибок</th><th>Проверка</th><th>Действия</th></tr></thead><tbody id="sources-body"></tbody></table></div>
+</section>
+</div>
 <div id="tab-bots" hidden>
   <section><h2>Потенциальные боты и сканеры</h2>
    <p class="hint">Классификация эвристическая: по User-Agent, 4xx и отказам доступа; не является подтверждением владельца IP. ASN и страна берутся из локальных CSV.</p>

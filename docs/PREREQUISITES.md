@@ -23,7 +23,7 @@
 Сначала установите/проверьте компоненты IIS:
 
 ```powershell
-$pkg = 'C:\Deploy\IISReports-3.0.2'
+$pkg = 'C:\Deploy\IISReports-3.1.0'
 & "$pkg\tools\Install-Prerequisites.ps1" -InstallMissing
 ```
 
@@ -81,3 +81,9 @@ Developer-редакцию не следует считать лицензией
 Если SQL локален, не открывайте его порт наружу. Для удалённого SQL разрешите только соединения от нужных узлов. Входящий порт панели также ограничьте административной сетью/VPN. Исходящие соединения сборщика разрешайте только к согласованным проверяемым адресам и webhook.
 
 [Настройка SQL firewall](https://learn.microsoft.com/en-us/sql/database-engine/configure-windows/configure-a-windows-firewall-for-database-engine-access).
+
+## Дополнение для автоматических источников
+
+Нужны Windows Task Scheduler / модуль `ScheduledTasks`, x64 Windows PowerShell 5.1 и `Microsoft.Web.Administration.dll` из установленного IIS. `Install-AutoDiscovery.ps1` выполняется администратором и регистрирует защищённую задачу SYSTEM. Сама служба остаётся непривилегированной. На управляемых серверах создание задач SYSTEM/изменение ACL может требовать согласования с администраторами.
+
+Базового IIS недостаточно для хранения истории: MSSQL всё ещё обязателен (локальный или удалённый). Отсутствующие компоненты IIS проверяются штатным Install-Prerequisites; SQL Server автоматически не скачивается и не устанавливается.

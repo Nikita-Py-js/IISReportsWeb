@@ -99,7 +99,7 @@ namespace IISReports
                 canRead=CanRead(ctx),canEdit=CanEdit(ctx),denialCode=DenialCode(ctx),
                 processIdentity=CanEdit(ctx)?WindowsIdentity.GetCurrent().Name:null,
                 csrfProtection="user + browser cookie + app path + origin + expiry; MachineKey.Protect",
-                version="3.0.2" };
+                version="3.1.0" };
         }
         private static string AppPath(HttpContext ctx)
         { string p=ctx.Request.ApplicationPath;return string.IsNullOrEmpty(p)||p=="/"?"/":p.TrimEnd('/')+"/"; }
