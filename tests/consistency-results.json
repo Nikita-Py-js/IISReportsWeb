@@ -1,7 +1,7 @@
 {
   "suite": "portable source/package consistency (not compilation)",
-  "passed": 63,
-  "total": 63,
+  "passed": 65,
+  "total": 65,
   "tests": [
     {
       "test": "release version",
@@ -221,6 +221,14 @@
     },
     {
       "test": "database installer applies and verifies 005/006",
+      "status": "PASS"
+    },
+    {
+      "test": "core verifier uses table-name membership, not exact table count",
+      "status": "PASS"
+    },
+    {
+      "test": "3.1 discovery verifier still checks schema 310",
       "status": "PASS"
     },
     {

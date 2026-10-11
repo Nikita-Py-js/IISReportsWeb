@@ -30,6 +30,7 @@ docs/DATABASE.md
 docs/HOTFIX-BUILD.md
 docs/HOTFIX-SETUP.md
 docs/HOTFIX-SQL-CONNECTION.md
+docs/HOTFIX-VERIFY.md
 docs/INSTALL.md
 docs/OPERATIONS.md
 docs/PREREQUISITES.md
@@ -58,6 +59,7 @@ tests/consistency-results.json
 tests/release-validation.json
 tests/setup-hotfix-static-results.json
 tests/sources-preview.png
+tests/test_schema_verifier.py
 tests/validate_release.py
 tools/Build-And-Test.ps1
 tools/Check-Deployment.ps1
