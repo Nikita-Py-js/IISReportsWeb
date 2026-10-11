@@ -1,5 +1,7 @@
 # Устранение ошибок
 
+> **BUILD-FIX1:** при отсутствии `UnitTests.exe` используйте обновлённый скрипт и [порядок диагностики](HOTFIX-BUILD.md). Пропускать тесты не нужно.
+
 [← README](../README.md)
 
 ## 403.14 / DirectoryListingModule

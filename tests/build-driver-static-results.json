@@ -1,0 +1,103 @@
+{
+  "suite": "BUILD-FIX1 portable source checks, not PowerShell/C# execution",
+  "passed": 24,
+  "total": 24,
+  "tests": [
+    {
+      "test": "Windows-only build is explicit",
+      "status": "PASS"
+    },
+    {
+      "test": "PowerShell 5.1 requirement",
+      "status": "PASS"
+    },
+    {
+      "test": "output path resolved using PowerShell provider",
+      "status": "PASS"
+    },
+    {
+      "test": "explicit native process instead of ambiguous Compile command",
+      "status": "PASS"
+    },
+    {
+      "test": "wait and process-owned exit code",
+      "status": "PASS"
+    },
+    {
+      "test": "no native exit-code state inherited from caller",
+      "status": "PASS"
+    },
+    {
+      "test": "stdout and stderr drained asynchronously",
+      "status": "PASS"
+    },
+    {
+      "test": "stdout and stderr logs persisted",
+      "status": "PASS"
+    },
+    {
+      "test": "response files used and default compiler rsp excluded",
+      "status": "PASS"
+    },
+    {
+      "test": "quotes in argument paths validated",
+      "status": "PASS"
+    },
+    {
+      "test": "compiler output checked after exit code",
+      "status": "PASS"
+    },
+    {
+      "test": "assembly existence size and metadata validated",
+      "status": "PASS"
+    },
+    {
+      "test": "compiler preflight precedes application build",
+      "status": "PASS"
+    },
+    {
+      "test": "probe execution checked",
+      "status": "PASS"
+    },
+    {
+      "test": "unit test execution and positive summary required",
+      "status": "PASS"
+    },
+    {
+      "test": "staging directory is unique",
+      "status": "PASS"
+    },
+    {
+      "test": "build lock exclusive",
+      "status": "PASS"
+    },
+    {
+      "test": "prior success marker invalidated before compile",
+      "status": "PASS"
+    },
+    {
+      "test": "success marker written only after test execution",
+      "status": "PASS"
+    },
+    {
+      "test": "source changes during build checked",
+      "status": "PASS"
+    },
+    {
+      "test": "test order and all test executables retained",
+      "status": "PASS"
+    },
+    {
+      "test": "no security bypass or installation command",
+      "status": "PASS"
+    },
+    {
+      "test": "build marker compatible with packaging keys",
+      "status": "PASS"
+    },
+    {
+      "test": "standalone C# still identical",
+      "status": "PASS"
+    }
+  ]
+}

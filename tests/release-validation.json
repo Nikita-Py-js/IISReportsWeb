@@ -1,28 +1,26 @@
 {
   "release": "3.1.0",
-  "distribution": "Full source project, automatic IIS source discovery and monitoring checkboxes; no precompiled Windows EXE",
-  "environment": "Linux container, Chromium/Node.js/Python; no Windows, IIS or SQL Server runtime",
+  "distribution": "BUILD-FIX1 full sources; no precompiled EXE",
+  "environment": "Linux; no Windows PowerShell or .NET Framework runtime available",
   "executed": [
     {
-      "suite": "Chromium scenarios with mocked API",
-      "passed": 44,
-      "failed": 0,
-      "report": "browser-results.json"
-    },
-    {
-      "suite": "Portable source consistency, NOT compilation",
+      "suite": "Portable project source consistency (not compilation)",
       "passed": 63,
       "failed": 0,
       "report": "consistency-results.json"
     },
     {
-      "suite": "JavaScript syntax: node --check",
-      "passed": 2,
+      "suite": "BUILD-FIX1 portable source checks (not PowerShell execution)",
+      "passed": 24,
       "failed": 0,
-      "targets": [
-        "web/v3.js",
-        "inline script in web/index.html"
-      ]
+      "report": "build-driver-static-results.json"
+    }
+  ],
+  "inherited_not_rerun": [
+    {
+      "suite": "Chromium mock API scenarios",
+      "report": "browser-results.json",
+      "note": "Unchanged report from the base 3.1.0 package. Web source is byte-identical; these tests were not rerun for this build-driver fix."
     }
   ],
   "not_executed": [
@@ -34,10 +32,11 @@
     "Windows service installation, real log import and webhook delivery",
     "GitHub Actions workflow"
   ],
-  "acceptance": "Run Build-And-Test, database checks, isolated Test-Http and discovery/pause tests on a Windows staging server. Browser mocks do not prove backend integration.",
+  "acceptance": "Run the updated Build-And-Test.ps1 on Windows. Inspect build/logs and require a fresh BUILDINFO.json after all real compilations and local tests pass.",
   "packaging_checks": [
     "ZIP CRC",
-    "source/agent sync",
+    "runtime web/agent/SQL sources unchanged",
+    "standalone C# sync",
     "complete manifests",
     "per-file SHA256 verified"
   ]

@@ -27,6 +27,7 @@ docs/API.md
 docs/AUTO-SOURCES.md
 docs/CONFIGURATION.md
 docs/DATABASE.md
+docs/HOTFIX-BUILD.md
 docs/HOTFIX-SQL-CONNECTION.md
 docs/INSTALL.md
 docs/OPERATIONS.md
@@ -49,6 +50,8 @@ tests/SqlIntegrationTests.cs
 tests/UnitTests.cs
 tests/browser-results.json
 tests/browser_smoke.py
+tests/build-driver-static-results.json
+tests/check_build_driver.py
 tests/consistency-results.json
 tests/release-validation.json
 tests/sources-preview.png
