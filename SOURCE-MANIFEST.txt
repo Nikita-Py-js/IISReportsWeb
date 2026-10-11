@@ -28,6 +28,7 @@ docs/AUTO-SOURCES.md
 docs/CONFIGURATION.md
 docs/DATABASE.md
 docs/HOTFIX-BUILD.md
+docs/HOTFIX-SETUP.md
 docs/HOTFIX-SQL-CONNECTION.md
 docs/INSTALL.md
 docs/OPERATIONS.md
@@ -52,8 +53,10 @@ tests/browser-results.json
 tests/browser_smoke.py
 tests/build-driver-static-results.json
 tests/check_build_driver.py
+tests/check_setup_hotfix.py
 tests/consistency-results.json
 tests/release-validation.json
+tests/setup-hotfix-static-results.json
 tests/sources-preview.png
 tests/validate_release.py
 tools/Build-And-Test.ps1
@@ -77,7 +80,9 @@ tools/Setup.Common.ps1
 tools/Test-DiscoverySql.ps1
 tools/Test-Http.ps1
 tools/Test-PowerShellSyntax.ps1
+tools/Test-SetupPaths.ps1
 tools/Test-Sql.ps1
+tools/Test-SqlConnection.ps1
 tools/Test-SqlConnectionBuilder.ps1
 tools/Verify-Package.ps1
 web/App_Code/Extensions.cs

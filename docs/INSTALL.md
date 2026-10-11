@@ -96,6 +96,28 @@ build\BUILDINFO.json
 
 **Не копируйте тестовые DLL в `web\Bin`.** ASP.NET компилирует те же классы из `App_Code`; двойная публикация приведёт к конфликтам типов.
 
+## Перед подключением: проверьте экземпляр SQL и рабочий каталог
+
+`localhost\SQLEXPRESS` в примере — не автоматическое определение SQL. Для службы
+`MSSQLSERVER` обычно используется `localhost`; фактический экземпляр проверьте в SSMS
+или через `Get-Service`. После изменения `$sqlServer` пересоздайте `$dbArgs` и `$newConfig`.
+
+```powershell
+Set-Location -LiteralPath $pkg
+[Environment]::CurrentDirectory = (Get-Location).ProviderPath
+
+$probe = @{
+    SqlServer = $sqlServer
+    Database = 'master'
+    TrustServerCertificate = $trustSqlCertificate
+}
+& "$pkg\tools\Test-SqlConnection.ps1" @probe
+```
+
+Этот тест реально открывает соединение и делает только SELECT. Если он не прошёл,
+не продолжайте создание БД. `Test-SqlConnectionBuilder.ps1` ниже проверяет только
+формирование строк, а не ваш экземпляр SQL.
+
 ## 3. Создайте базу и схему
 
 Если при работе со старым дистрибутивом появлялась ошибка `Keyword not supported: DataSource`, используйте этот выпуск и [инструкцию исправления](HOTFIX-SQL-CONNECTION.md).
@@ -123,6 +145,17 @@ $dbArgs = @{
 ```
 
 ## 4. Создайте два независимых конфигурационных файла
+
+В SETUP-FIX1 защита папки задаётся через .NET, без запуска icacls. Используйте отдельную
+пустую папку с абсолютным локальным путём. Заполненная папка с другими правами не меняется.
+После сбоя запуска icacls см. [HOTFIX-SETUP.md](HOTFIX-SETUP.md).
+
+Проверка на временной тестовой папке (Windows PowerShell 5.1 от администратора):
+
+```powershell
+& "$pkg\tools\Test-SetupPaths.ps1"
+```
+
 
 ```powershell
 $newConfig = @{

@@ -1,0 +1,95 @@
+{
+  "suite": "structural setup checks; not Windows execution",
+  "passed": 22,
+  "total": 22,
+  "tests": [
+    {
+      "test": "no native launch in directory helper",
+      "status": "PASS"
+    },
+    {
+      "test": "Windows Framework explicitly required",
+      "status": "PASS"
+    },
+    {
+      "test": "administrator required",
+      "status": "PASS"
+    },
+    {
+      "test": "explicit local path guard",
+      "status": "PASS"
+    },
+    {
+      "test": "root guard",
+      "status": "PASS"
+    },
+    {
+      "test": "reparse-point ancestors guarded",
+      "status": "PASS"
+    },
+    {
+      "test": "nonempty folder not rewritten",
+      "status": "PASS"
+    },
+    {
+      "test": "exact protected ACL",
+      "status": "PASS"
+    },
+    {
+      "test": "SID based administrators and SYSTEM",
+      "status": "PASS"
+    },
+    {
+      "test": "managed creation and update",
+      "status": "PASS"
+    },
+    {
+      "test": "resultant DACL verified",
+      "status": "PASS"
+    },
+    {
+      "test": "no files written by helper",
+      "status": "PASS"
+    },
+    {
+      "test": "templates validated before ACL change",
+      "status": "PASS"
+    },
+    {
+      "test": "ACL checked before configs saved",
+      "status": "PASS"
+    },
+    {
+      "test": "working config overwrite guard retained",
+      "status": "PASS"
+    },
+    {
+      "test": "SQL builder FIX1 retained",
+      "status": "PASS"
+    },
+    {
+      "test": "probe only identity SELECT",
+      "status": "PASS"
+    },
+    {
+      "test": "probe preserves connection security",
+      "status": "PASS"
+    },
+    {
+      "test": "probe does not print connection string",
+      "status": "PASS"
+    },
+    {
+      "test": "test uses unique temp child",
+      "status": "PASS"
+    },
+    {
+      "test": "test existing XML no overwrite",
+      "status": "PASS"
+    },
+    {
+      "test": "test unused native command trap",
+      "status": "PASS"
+    }
+  ]
+}

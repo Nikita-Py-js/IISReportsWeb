@@ -25,10 +25,105 @@ function Set-XmlSetting([xml]$Document,[string]$Key,[string]$Value) {
     }
     $node.SetAttribute('value',$Value)
 }
-function New-RestrictedDirectory([string]$Directory) {
-    [void][IO.Directory]::CreateDirectory([IO.Path]::GetFullPath($Directory))
-    & icacls.exe $Directory /inheritance:r /grant:r '*S-1-5-32-544:(OI)(CI)(F)' '*S-1-5-18:(OI)(CI)(F)' | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Could not restrict NTFS permissions: $Directory" }
+function Get-SetupDirectoryPath {
+    # Deliberately accept only explicit local, drive-qualified Windows paths.
+    # Resolving a relative .NET path against Environment.CurrentDirectory is unsafe
+    # here: that directory is NOT necessarily PowerShell's current location.
+    param([Parameter(Mandatory=$true)][string]$Directory)
+    if ([string]::IsNullOrWhiteSpace($Directory) -or $Directory -ne $Directory.Trim()) {
+        throw 'Directory must be a nonempty path without leading/trailing whitespace.'
+    }
+    if ($Directory -notmatch '^[A-Za-z]:\\' -or
+        $Directory -match '[\x00-\x1f<>"|?*]' -or
+        $Directory.Substring(2).Contains(':')) {
+        throw 'Use a local absolute directory such as C:\Deploy\IISReports-config (not a URI, UNC path, or drive-relative path).'
+    }
+    $full = [IO.Path]::GetFullPath($Directory).TrimEnd('\')
+    if ($full -eq [IO.Path]::GetPathRoot($full).TrimEnd('\')) {
+        throw 'Refusing to change permissions on a drive root.'
+    }
+    if ([IO.File]::Exists($full)) { throw "Directory is an existing file: $full" }
+    # Do not redirect privileged ACL operations through a junction/symlink.
+    $cursor = $full
+    while ($cursor) {
+        if ([IO.Directory]::Exists($cursor)) {
+            $attrs = [IO.File]::GetAttributes($cursor)
+            if (($attrs -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "Refusing a directory with a reparse-point ancestor: $cursor"
+            }
+        }
+        $parent = [IO.Path]::GetDirectoryName($cursor)
+        if ($parent -eq $cursor) { break }
+        $cursor = $parent
+    }
+    return $full
+}
+function Test-RestrictedDirectoryAcl {
+    param([Parameter(Mandatory=$true)][Security.AccessControl.DirectorySecurity]$Acl)
+    if (-not $Acl.AreAccessRulesProtected) { return $false }
+    $rules = @($Acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier]))
+    if ($rules.Count -ne 2) { return $false }
+    $expected = @('S-1-5-32-544','S-1-5-18')
+    $seen = @()
+    $inherit = [Security.AccessControl.InheritanceFlags]::ContainerInherit -bor
+               [Security.AccessControl.InheritanceFlags]::ObjectInherit
+    foreach ($rule in $rules) {
+        $sid = $rule.IdentityReference.Value
+        if ($sid -notin $expected -or $sid -in $seen -or $rule.IsInherited -or
+            $rule.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow -or
+            $rule.FileSystemRights -ne [Security.AccessControl.FileSystemRights]::FullControl -or
+            $rule.InheritanceFlags -ne $inherit -or
+            $rule.PropagationFlags -ne [Security.AccessControl.PropagationFlags]::None) { return $false }
+        $seen += $sid
+    }
+    return $true
+}
+function New-RestrictedDirectory {
+    # SETUP-FIX1: no native icacls process; no dependency on its working directory.
+    # Only Administrators and SYSTEM get access. Never weaken a populated folder.
+    param([Parameter(Mandatory=$true)][string]$Directory)
+    if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT -or
+        $PSVersionTable.PSEdition -ne 'Desktop') {
+        throw 'Directory ACL setup requires elevated Windows PowerShell 5.1 / .NET Framework.'
+    }
+    Assert-Administrator
+    $full = Get-SetupDirectoryPath -Directory $Directory
+    if ([IO.Directory]::Exists($full)) {
+        $existing = [IO.Directory]::GetAccessControl($full)
+        if (Test-RestrictedDirectoryAcl -Acl $existing) { return }
+        if (@(Get-ChildItem -LiteralPath $full -Force -ErrorAction Stop).Count -ne 0) {
+            throw "Directory contains files and does not have the expected restricted ACL. Nothing changed. Choose a new dedicated folder: $full"
+        }
+    }
+    $acl = New-Object Security.AccessControl.DirectorySecurity
+    $acl.SetAccessRuleProtection($true,$false)
+    $inherit = [Security.AccessControl.InheritanceFlags]::ContainerInherit -bor
+               [Security.AccessControl.InheritanceFlags]::ObjectInherit
+    foreach ($value in @('S-1-5-32-544','S-1-5-18')) {
+        $sid = New-Object Security.Principal.SecurityIdentifier -ArgumentList $value
+        $rule = New-Object Security.AccessControl.FileSystemAccessRule -ArgumentList @(
+            $sid,
+            [Security.AccessControl.FileSystemRights]::FullControl,
+            $inherit,
+            [Security.AccessControl.PropagationFlags]::None,
+            [Security.AccessControl.AccessControlType]::Allow
+        )
+        [void]$acl.AddAccessRule($rule)
+    }
+    try {
+        if ([IO.Directory]::Exists($full)) {
+            [IO.Directory]::SetAccessControl($full,$acl)
+        } else {
+            # This .NET Framework overload applies the DACL when creating the directory.
+            [void][IO.Directory]::CreateDirectory($full,$acl)
+        }
+        $actual = [IO.Directory]::GetAccessControl($full)
+        if (-not (Test-RestrictedDirectoryAcl -Acl $actual)) {
+            throw 'The resulting directory DACL did not pass verification.'
+        }
+    } catch {
+        throw "Cannot secure directory '$full'. No configuration was written by this helper. $($_.Exception.Message)"
+    }
 }
 function Save-NewXml([xml]$Document,[string]$Destination) {
     $full = [IO.Path]::GetFullPath($Destination)

@@ -1,43 +1,19 @@
 {
-  "release": "3.1.0",
-  "distribution": "BUILD-FIX1 full sources; no precompiled EXE",
-  "environment": "Linux; no Windows PowerShell or .NET Framework runtime available",
-  "executed": [
-    {
-      "suite": "Portable project source consistency (not compilation)",
-      "passed": 63,
-      "failed": 0,
-      "report": "consistency-results.json"
-    },
-    {
-      "suite": "BUILD-FIX1 portable source checks (not PowerShell execution)",
-      "passed": 24,
-      "failed": 0,
-      "report": "build-driver-static-results.json"
-    }
-  ],
-  "inherited_not_rerun": [
-    {
-      "suite": "Chromium mock API scenarios",
-      "report": "browser-results.json",
-      "note": "Unchanged report from the base 3.1.0 package. Web source is byte-identical; these tests were not rerun for this build-driver fix."
-    }
-  ],
+  "package": "IISReports-3.1.0-SETUP-FIX1",
+  "base": "3.1.0-BUILD-FIX1",
+  "runtime_changed": false,
+  "schema_changed": false,
+  "checks": {
+    "source_consistency": 63,
+    "build_driver_static": 24,
+    "setup_hotfix_static": 22
+  },
   "not_executed": [
-    "PowerShell parser/runtime on Windows PowerShell 5.1",
-    ".NET Framework C# compilation and the included UnitTests.exe",
-    "SQL 005 migration, column permissions, transaction/pause/discovery integration tests",
-    "IIS/Windows Authentication and live server-side CSRF tests",
-    "SYSTEM scheduled task, real IIS inventory and NTFS ACL changes",
-    "Windows service installation, real log import and webhook delivery",
-    "GitHub Actions workflow"
+    "PowerShell parser on Windows",
+    "new PowerShell scripts on Windows",
+    "NTFS ACL integration",
+    "SQL connection and migration",
+    "IIS deployment"
   ],
-  "acceptance": "Run the updated Build-And-Test.ps1 on Windows. Inspect build/logs and require a fresh BUILDINFO.json after all real compilations and local tests pass.",
-  "packaging_checks": [
-    "ZIP CRC",
-    "runtime web/agent/SQL sources unchanged",
-    "standalone C# sync",
-    "complete manifests",
-    "per-file SHA256 verified"
-  ]
+  "note": "Existing browser report is inherited; browser tests were not rerun because web code is unchanged."
 }

@@ -21,10 +21,9 @@ try { $null=(New-Object Security.Principal.NTAccount($Editor)).Translate([Securi
 catch { throw "Cannot resolve Windows account/group: $Editor" }
 if(($null -eq $WebSqlCredential) -ne ($null -eq $AgentSqlCredential)) { throw 'Provide both separate SQL credentials, or neither for Windows SQL authentication.' }
 if($null -ne $WebSqlCredential -and $WebSqlCredential.UserName -eq $AgentSqlCredential.UserName) { throw 'Use distinct SQL logins for web and agent.' }
-$dir=[IO.Path]::GetFullPath($ConfigDirectory).TrimEnd('\')
+$dir=Get-SetupDirectoryPath -Directory $ConfigDirectory
 if($dir -match '(?i)\\inetpub\\wwwroot(?:\\|$)') { throw 'Put installation secrets outside all IIS roots (for example C:\Deploy\IISReports-config).' }
 foreach($name in @('Web.config','agent-local.config')) { if(Test-Path -LiteralPath (Join-Path $dir $name)) { throw "Configuration already exists: $name. No files were changed." } }
-New-RestrictedDirectory $dir
 $root=Split-Path $PSScriptRoot -Parent
 [xml]$web=[IO.File]::ReadAllText("$root\web\Web.config.example")
 [xml]$agent=[IO.File]::ReadAllText("$root\agent\IISReports.Agent.exe.config.example")
@@ -34,6 +33,8 @@ Set-XmlSetting $web 'IISReportsEditors' $Editor
 Set-XmlSetting $web 'IISReportsReaders' $Readers
 Set-XmlSetting $web 'IISReportsAccessMode' 'windows'
 Set-XmlSetting $web 'IISReportsPublicOrigin' $origin
+# Validate templates and connection settings before changing any ACL.
+New-RestrictedDirectory -Directory $dir
 Save-NewXml $web (Join-Path $dir 'Web.config')
 Save-NewXml $agent (Join-Path $dir 'agent-local.config')
 Write-Host "Created Web.config and agent-local.config in $dir. Secrets were not printed."
