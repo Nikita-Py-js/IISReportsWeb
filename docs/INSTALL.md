@@ -39,7 +39,7 @@ $certThumbprint = 'REPLACE_WITH_CERTIFICATE_THUMBPRINT'
 
 # False для доверенного SQL-сертификата.
 # True допустим только как осознанное исключение для локального стенда.
-$trustSqlCertificate = $false
+$trustSqlCertificate = $true
 
 # Источники не перечисляются вручную. Все локальные сайты IIS обнаруживаются автоматически.
 ```
