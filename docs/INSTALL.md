@@ -69,6 +69,7 @@ notepad 'C:\Deploy\IISReports.setup.psd1'
 - `PublicUrl`: **адрес браузера**, включая протокол и нестандартный порт. Например `https://reports.example.test:8443/`.
 - `SiteName` и `AppPoolName`: новые свободные имена IIS; это не имена папок.
 - `CertificateThumbprint`: для `Https` заполните настоящим отпечатком из `Cert:\LocalMachine\My`. В остальных режимах оставьте `''`.
+- `BindingMode`: протокол HTTPS или HTTP
 
 Полное объяснение: [SETTINGS.md](SETTINGS.md).
 
