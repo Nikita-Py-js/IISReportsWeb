@@ -25,7 +25,7 @@ namespace IISReports
     }
     public static class V3Api
     {
-        private static readonly HashSet<string> Writes=new HashSet<string>(new[]{"refresh","job-create","check-save","rule-save","incident-action","notification-test","notification-retry","sources-save"},StringComparer.Ordinal);
+        private static readonly HashSet<string> Writes=new HashSet<string>(new[]{"csrf-check","refresh","job-create","check-save","rule-save","incident-action","notification-test","notification-retry","sources-save"},StringComparer.Ordinal);
         public static bool Handles(string action)
         {
             return Writes.Contains(action)||new[]{"whoami","csrf","health","diag","agent","sources","generations","jobs","checks","check-results","rules","incidents","incident-events","notifications","raw-event","parse-errors","audit"}.Contains(action);
@@ -42,6 +42,7 @@ namespace IISReports
             if(Writes.Contains(action))AccessControl.RequirePost(ctx);
             else if(ctx.Request.HttpMethod!="GET")throw new ApiFailure(405,"get_required","Use GET for this endpoint.");
             if(action=="csrf")return new{token=AccessControl.Token(ctx),security=AccessControl.IdentityInfo(ctx)};
+            if(action=="csrf-check")return new{ok=true,validated=true,mutation=false};
             if(action=="health")return Health(ctx,false);
             if(action=="diag"){AccessControl.RequireEditor(ctx);return Health(ctx,true);}
             using(var c=Store.Open())
@@ -140,7 +141,7 @@ namespace IISReports
                     bool agentWarning=(agents.Count>0&&Store.Str(agents[0]["State"])=="warning")||discoveryWarning;
                     string status=!online?"stale":failures>0||agentWarning?"warn":"ok";
                     // Endpoint is informative JSON; consumers must inspect healthy/status, not HTTP 200 alone.
-                    return new {status=status,healthy=online&&failures==0&&!agentWarning,version="3.1.0",dbConnected=true,schemaInitialized=true,
+                    return new {status=status,healthy=online&&failures==0&&!agentWarning,version="3.1.1",dbConnected=true,schemaInitialized=true,
                         databaseError=(string)null,totalEntries=total,dbEntries=total,agentOnline=online,heartbeatAgeSeconds=age,
                         queuedJobs=queued,failedSources=failures,discoveryHealthy=!discoveryWarning,lastParsed=agents.Count==0?null:IsoDate(agents[0]["LastSuccessfulScanUtc"]),
                         errors=failures==0?new string[0]:new[]{"Some sources require attention. Open Sources."},
@@ -151,7 +152,7 @@ namespace IISReports
             catch(Exception ex)
             {
                 ctx.Response.StatusCode=503;
-                return new{status="stale",healthy=false,version="3.1.0",dbConnected=false,schemaInitialized=false,
+                return new{status="stale",healthy=false,version="3.1.1",dbConnected=false,schemaInitialized=false,
                     databaseError=detail?ex.Message:"Database/schema unavailable. An operator can inspect action=diag.",security=AccessControl.IdentityInfo(ctx)};
             }
         }

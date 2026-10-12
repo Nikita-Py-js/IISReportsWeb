@@ -2,15 +2,15 @@
 # Windows PowerShell 5.1 and .NET Framework 4.8.
 # Each request gets its own HttpWebRequest; only cookies are shared.
 # Thus a CSRF header from a previous request CANNOT leak into a negative test.
-# By default every attempted mutation must be rejected. -QueueScan explicitly queues a job.
+# Default tests include a successful no-op CSRF request. -QueueScan explicitly queues a job.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)] [uri] $ApplicationUrl,
     [switch] $QueueScan
 )
 $ErrorActionPreference = 'Stop'
-if ($ApplicationUrl.Scheme -notin @('http', 'https')) {
-    throw 'ApplicationUrl must be http:// or https://.'
+if ($ApplicationUrl.Scheme -notin @('http', 'https') -or $ApplicationUrl.UserInfo -or $ApplicationUrl.Query -or $ApplicationUrl.Fragment) {
+    throw 'ApplicationUrl must be HTTP(S), without credentials, query, or fragment.'
 }
 $base = $ApplicationUrl.AbsoluteUri.TrimEnd('/') + '/'
 $origin = $ApplicationUrl.GetLeftPart([System.UriPartial]::Authority)
@@ -75,7 +75,7 @@ function Send-Request {
 }
 
 function Get-ApiCode($Result) {
-    if ($null -eq $Result.Data -or $null -eq $Result.Data.code) { return '' }
+    if ($null -eq $Result.Data -or $null -eq $Result.Data.PSObject.Properties['code']) { return '' }
     return [string]$Result.Data.code
 }
 
@@ -122,7 +122,7 @@ if ($getCode -and $getCode -ne 'post_required') {
 Write-Host 'PASS GET cannot mutate (HTTP 405)'
 
 Require-Response -Name 'Origin mismatch denied' -Result (
-    Send-Request -Action 'refresh' -Method 'POST' -Headers @{
+    Send-Request -Action 'csrf-check' -Method 'POST' -Headers @{
         'Origin'='https://not-this-origin.invalid';
         'X-IISReports-CSRF'=[string]$csrf.Data.token
     }
@@ -131,18 +131,18 @@ Require-Response -Name 'Origin mismatch denied' -Result (
 # Critically: valid cookie, same Origin, but NO CSRF header.
 # A previous test's headers CANNOT be inherited by this request.
 Require-Response -Name 'Missing CSRF header denied' -Result (
-    Send-Request -Action 'refresh' -Method 'POST' -Headers @{ 'Origin'=$origin }
+    Send-Request -Action 'csrf-check' -Method 'POST' -Headers @{ 'Origin'=$origin }
 ) -Status 403 -ApiCode 'csrf_missing'
 
 Require-Response -Name 'Invalid CSRF token denied' -Result (
-    Send-Request -Action 'refresh' -Method 'POST' -Headers @{
+    Send-Request -Action 'csrf-check' -Method 'POST' -Headers @{
         'Origin'=$origin;
         'X-IISReports-CSRF'='not-a-valid-token'
     }
 ) -Status 403 -ApiCode 'csrf_invalid'
 
 Require-Response -Name 'Missing CSRF cookie denied' -Result (
-    Send-Request -Action 'refresh' -Method 'POST' -Headers @{
+    Send-Request -Action 'csrf-check' -Method 'POST' -Headers @{
         'Origin'=$origin;
         'X-IISReports-CSRF'=[string]$csrf.Data.token
     } -WithoutCookies
@@ -159,6 +159,16 @@ Require-Response -Name 'Empty source change set is rejected' -Result (
     }
 ) -Status 400 -ApiCode 'invalid_sources'
 
+# Positive control: same-origin + cookie + token must succeed, WITHOUT enqueueing a job.
+$positive = Send-Request -Action 'csrf-check' -Method 'POST' -Headers @{
+    'Origin'=$origin;
+    'X-IISReports-CSRF'=[string]$csrf.Data.token
+}
+Require-Response -Name 'Valid CSRF POST (no mutation)' -Result $positive -Status 200
+if ($null -eq $positive.Data -or $positive.Data.validated -ne $true -or $positive.Data.mutation -ne $false) {
+    throw 'Expected the no-op CSRF endpoint, but received another response. Check the deployed version.'
+}
+
 if ($QueueScan) {
     Require-Response -Name 'Valid POST queues scan' -Result (
         Send-Request -Action 'refresh' -Method 'POST' -Headers @{
@@ -167,4 +177,4 @@ if ($QueueScan) {
         }
     ) -Status 202
 }
-Write-Host 'DONE: CSRF smoke tests complete. No source selections were changed; no valid mutation was sent unless -QueueScan was used.'
+Write-Host 'DONE: CSRF smoke tests complete. No source selections were changed; the positive CSRF control has no side effects. A scan is queued only with -QueueScan.'

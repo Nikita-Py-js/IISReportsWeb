@@ -9,7 +9,8 @@ param(
  [Parameter(Mandatory=$true)][string]$PublicUrl,
  [System.Management.Automation.PSCredential]$WebSqlCredential,
  [System.Management.Automation.PSCredential]$AgentSqlCredential,
- [switch]$TrustServerCertificate
+ [switch]$TrustServerCertificate,
+ [switch]$UseExisting
 )
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\Setup.Common.ps1"
@@ -23,7 +24,7 @@ if(($null -eq $WebSqlCredential) -ne ($null -eq $AgentSqlCredential)) { throw 'P
 if($null -ne $WebSqlCredential -and $WebSqlCredential.UserName -eq $AgentSqlCredential.UserName) { throw 'Use distinct SQL logins for web and agent.' }
 $dir=Get-SetupDirectoryPath -Directory $ConfigDirectory
 if($dir -match '(?i)\\inetpub\\wwwroot(?:\\|$)') { throw 'Put installation secrets outside all IIS roots (for example C:\Deploy\IISReports-config).' }
-foreach($name in @('Web.config','agent-local.config')) { if(Test-Path -LiteralPath (Join-Path $dir $name)) { throw "Configuration already exists: $name. No files were changed." } }
+
 $root=Split-Path $PSScriptRoot -Parent
 [xml]$web=[IO.File]::ReadAllText("$root\web\Web.config.example")
 [xml]$agent=[IO.File]::ReadAllText("$root\agent\IISReports.Agent.exe.config.example")
@@ -33,9 +34,31 @@ Set-XmlSetting $web 'IISReportsEditors' $Editor
 Set-XmlSetting $web 'IISReportsReaders' $Readers
 Set-XmlSetting $web 'IISReportsAccessMode' 'windows'
 Set-XmlSetting $web 'IISReportsPublicOrigin' $origin
-# Validate templates and connection settings before changing any ACL.
+# Validate ALL existing files before creating any missing file. Never rewrite a working config.
+$plans=@(@{Name='Web.config';Document=$web},@{Name='agent-local.config';Document=$agent})
+foreach($plan in $plans) {
+    $path=Join-Path $dir $plan.Name
+    if(Test-Path -LiteralPath $path) {
+        if(-not $UseExisting){throw "Configuration already exists: $($plan.Name). Use -UseExisting to validate and keep it, or choose another folder. No files changed."}
+        $actual=Get-SetupXmlSettings $path
+        # Validate critical intended settings only; allow separately configured optional settings.
+        $keys=if($plan.Name -eq 'Web.config'){@('ConnStr','IISReportsEditors','IISReportsReaders','IISReportsAccessMode','IISReportsPublicOrigin')}else{@('ConnStr')}
+        foreach($key in $keys){
+            $expected=$plan.Document.SelectSingleNode("/configuration/appSettings/add[@key='$key']").GetAttribute('value')
+            if(-not $actual.ContainsKey($key)){throw "Existing $($plan.Name) is missing $key. It was not overwritten."}
+            if($key -eq 'ConnStr') {
+                $a=Get-SetupSqlBuilder $actual[$key];$b=Get-SetupSqlBuilder $expected
+                if(-not $a.EquivalentTo($b)){throw "Existing $($plan.Name) has a different SQL connection. No credentials were printed; review the configuration or settings file."}
+            }elseif($actual[$key] -ine $expected){throw "Existing $($plan.Name) disagrees with the intended setting $key. No files changed."}
+        }
+    }
+}
 New-RestrictedDirectory -Directory $dir
-Save-NewXml $web (Join-Path $dir 'Web.config')
-Save-NewXml $agent (Join-Path $dir 'agent-local.config')
+foreach($plan in $plans){
+    $path=Join-Path $dir $plan.Name
+    if(-not(Test-Path -LiteralPath $path)){Save-NewXml $plan.Document $path}
+    Assert-SetupFile $path $plan.Name
+}
+& "$PSScriptRoot\Test-InstallConfig.ps1" -ConfigDirectory $dir -ExpectedSqlServer $SqlServer -ExpectedDatabase $Database -ExpectedPublicUrl $PublicUrl -ExpectedEditor $Editor
 Write-Host "Created Web.config and agent-local.config in $dir. Secrets were not printed."
 Write-Host "Public browser origin: $origin. Use this exact scheme/host/port in browser and Test-Http."

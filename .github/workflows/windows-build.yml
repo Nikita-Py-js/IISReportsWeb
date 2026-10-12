@@ -10,6 +10,13 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate installation plan and config creation on Windows
+        shell: powershell
+        run: |
+          .\tools\Test-PowerShellSyntax.ps1
+          .\tools\Test-SqlConnectionBuilder.ps1
+          .\tools\Test-SetupPaths.ps1
+          .\tools\Test-InstallWorkflow.ps1
       - name: Compile C# 5 and run local tests
         shell: powershell
         run: .\tools\Build-And-Test.ps1

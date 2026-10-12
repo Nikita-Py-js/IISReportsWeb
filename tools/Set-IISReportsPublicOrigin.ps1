@@ -12,6 +12,7 @@ param(
     [string] $BackupDirectory = "$env:ProgramData\IISReportsBackups"
 )
 $ErrorActionPreference = 'Stop'
+. "$PSScriptRoot\Setup.Common.ps1"
 
 $fullConfig = [System.IO.Path]::GetFullPath($WebConfig)
 if (-not [System.IO.File]::Exists($fullConfig)) {
@@ -62,9 +63,7 @@ if ($PSCmdlet.ShouldProcess($fullConfig, "Back up Web.config and set IISReportsP
     if (($backupRoot+'\').StartsWith($webRoot+'\',[StringComparison]::OrdinalIgnoreCase)) {
         throw 'BackupDirectory must be outside the served website.'
     }
-    New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
-    & icacls.exe $backupRoot /inheritance:r /grant:r '*S-1-5-32-544:(OI)(CI)(F)' '*S-1-5-18:(OI)(CI)(F)' | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Cannot restrict the configuration backup directory.' }
+    New-RestrictedDirectory $backupRoot
     $backup = Join-Path $backupRoot ('Web-origin-' + (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '.config')
     Copy-Item -LiteralPath $fullConfig -Destination $backup -ErrorAction Stop
     if ($null -eq $setting) {

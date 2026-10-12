@@ -12,9 +12,11 @@ param(
 )
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot\Setup.Common.ps1"
-Assert-Administrator
+Assert-SetupWindows
 foreach($n in @($SiteName,$AppPoolName)) { if($n -notmatch '^[A-Za-z0-9_.-]{1,64}$') { throw 'Use a simple dedicated IIS site/pool name (letters, digits, dot, dash, underscore).' } }
 $package=Split-Path $PSScriptRoot -Parent
+Assert-SetupFile $ConfigFile 'Prepared Web.config'
+Assert-SetupBuild -PackageRoot $package -BuildDirectory (Join-Path $package 'build')
 $config=(Resolve-Path -LiteralPath $ConfigFile).Path
 [xml]$doc=[IO.File]::ReadAllText($config)
 $setting=$doc.SelectSingleNode('/configuration/appSettings/add[@key="IISReportsPublicOrigin"]')
@@ -26,13 +28,14 @@ $uri=[uri]$BindingUrl
 if($uri.AbsolutePath -ne '/') { throw 'Install-Web creates a root application, not an IIS child application.' }
 if($bindingOrigin -ne $public -and -not $ReverseProxy) { throw 'BindingUrl differs from public origin. Use -ReverseProxy intentionally, or correct the URL.' }
 if($uri.Scheme -eq 'http' -and -not $AllowHttp) { throw 'Use HTTPS; -AllowHttp explicitly permits a local test or restricted reverse-proxy backend.' }
+if($uri.HostNameType -eq [UriHostNameType]::IPv6){throw 'Configure IPv6 bindings manually; the clean installer uses DNS or IPv4.'}
 if($uri.Scheme -eq 'https') {
     $CertificateThumbprint=($CertificateThumbprint -replace '\s','').ToUpperInvariant()
     if($CertificateThumbprint -notmatch '^[A-F0-9]{40}$') { throw 'Provide a valid certificate thumbprint from LocalMachine\My.' }
     $cert=Get-Item -LiteralPath "Cert:\LocalMachine\My\$CertificateThumbprint"
-    if(-not $cert.HasPrivateKey -or $cert.NotAfter -le (Get-Date)) { throw 'Certificate must have a private key and must not be expired.' }
+    if(-not $cert.HasPrivateKey -or $cert.NotAfter -le (Get-Date) -or $cert.NotBefore -gt (Get-Date)) { throw 'Certificate must have a private key and must not be expired.' }
 }
-$target=[IO.Path]::GetFullPath($WebRoot).TrimEnd('\')
+$target=Get-SetupDirectoryPath $WebRoot
 if(($target+'\').StartsWith($package.TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'WebRoot must be separate from the unpacked source package.' }
 if(Test-Path -LiteralPath $target) {
     if(@(Get-ChildItem -LiteralPath $target -Force).Count -gt 0) { throw 'WebRoot is not empty. Use a clean directory or follow docs/UPGRADING.md.' }
@@ -48,8 +51,7 @@ try {
     $backupDir=Join-Path $env:ProgramData 'IISReportsBackups'
     New-RestrictedDirectory $backupDir
     $appcmd=Join-Path $env:windir 'System32\inetsrv\appcmd.exe'
-    & $appcmd add backup ('IISReports-install-'+(Get-Date -Format 'yyyyMMdd-HHmmss-fff')) | Out-Null
-    if($LASTEXITCODE -ne 0) { throw 'IIS backup failed.' }
+    Invoke-SetupNative -FilePath $appcmd -Arguments @('add','backup',('IISReports-install-'+(Get-Date -Format 'yyyyMMdd-HHmmss-fff')))
     New-RestrictedDirectory $target
     # Templates and samples are not copied to the publicly served directory.
     Get-ChildItem -LiteralPath "$package\web" -File | Where-Object { $_.Name -notlike '*.example' -and $_.Name -ne 'Web.config' } |
@@ -80,15 +82,9 @@ try {
     $manager.CommitChanges()
 } finally { $manager.Dispose() }
 $account='IIS AppPool\'+$AppPoolName
-& icacls.exe $target /grant "${account}:(OI)(CI)(RX)" | Out-Null
-if($LASTEXITCODE -ne 0) { throw 'Site remains stopped. Failed to grant the pool read/execute permissions.' }
-# Static files can be opened under the authenticated browser identity: grant read-only ACL,
-# while ASP.NET role checks still govern access to report data. No write permissions are granted.
-& icacls.exe $target /grant '*S-1-5-11:(OI)(CI)(RX)' | Out-Null
-if($LASTEXITCODE -ne 0) { throw 'Failed to grant read-only static-file access for authenticated users.' }
-# Connection strings are readable only by the pool, Administrators and SYSTEM on the filesystem.
-& icacls.exe (Join-Path $target 'Web.config') /inheritance:r /grant:r '*S-1-5-32-544:F' '*S-1-5-18:F' "${account}:R" | Out-Null
-if($LASTEXITCODE -ne 0) { throw 'Failed to restrict Web.config permissions.' }
+Set-SetupDirectoryAccess -Directory $target -ReadAccounts @($account,'S-1-5-11')
+# Protect the connection string separately from readable static files.
+Set-SetupFileAccess -Path (Join-Path $target 'Web.config') -ReadAccounts @($account)
 $manager=New-Object Microsoft.Web.Administration.ServerManager
 try { $manager.Sites[$SiteName].ServerAutoStart=$true;$manager.CommitChanges();$null=$manager.Sites[$SiteName].Start() }
 finally { $manager.Dispose() }

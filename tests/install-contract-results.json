@@ -1,0 +1,251 @@
+{
+  "suite": "portable installer contract (text/structure only; not PowerShell execution)",
+  "passed": 61,
+  "total": 61,
+  "tests": [
+    {
+      "test": "eleven explicit installation stages, no unsafe All mode",
+      "status": "PASS"
+    },
+    {
+      "test": "each documented main stage exists",
+      "status": "PASS"
+    },
+    {
+      "test": "all main stages documented",
+      "status": "PASS"
+    },
+    {
+      "test": "settings imported as data, not executed",
+      "status": "PASS"
+    },
+    {
+      "test": "PowerShell 5.1 Path fallback provided",
+      "status": "PASS"
+    },
+    {
+      "test": "relative settings resolved before changing cwd",
+      "status": "PASS"
+    },
+    {
+      "test": "both native and PowerShell working directories explicit",
+      "status": "PASS"
+    },
+    {
+      "test": "template keys match schema: LocalHttp.psd1",
+      "status": "PASS"
+    },
+    {
+      "test": "template binding mode: LocalHttp.psd1",
+      "status": "PASS"
+    },
+    {
+      "test": "template secure SQL default: LocalHttp.psd1",
+      "status": "PASS"
+    },
+    {
+      "test": "template keys match schema: Https.psd1",
+      "status": "PASS"
+    },
+    {
+      "test": "template binding mode: Https.psd1",
+      "status": "PASS"
+    },
+    {
+      "test": "template secure SQL default: Https.psd1",
+      "status": "PASS"
+    },
+    {
+      "test": "template keys match schema: ReverseProxy.psd1",
+      "status": "PASS"
+    },
+    {
+      "test": "template binding mode: ReverseProxy.psd1",
+      "status": "PASS"
+    },
+    {
+      "test": "template secure SQL default: ReverseProxy.psd1",
+      "status": "PASS"
+    },
+    {
+      "test": "rejects missing or mistyped settings",
+      "status": "PASS"
+    },
+    {
+      "test": "rejects string booleans",
+      "status": "PASS"
+    },
+    {
+      "test": "rejects placeholder editor and system database",
+      "status": "PASS"
+    },
+    {
+      "test": "rejects SQL URLs/double escaping",
+      "status": "PASS"
+    },
+    {
+      "test": "requires separate source/config/web/agent roots",
+      "status": "PASS"
+    },
+    {
+      "test": "forwarded keys accepted by Initialize-Database.ps1",
+      "status": "PASS"
+    },
+    {
+      "test": "forwarded keys accepted by Test-SqlConnection.ps1",
+      "status": "PASS"
+    },
+    {
+      "test": "forwarded keys accepted by New-InstallConfig.ps1",
+      "status": "PASS"
+    },
+    {
+      "test": "forwarded keys accepted by Install-Web.ps1",
+      "status": "PASS"
+    },
+    {
+      "test": "SQL probe admin credential uses correct parameter",
+      "status": "PASS"
+    },
+    {
+      "test": "missing configuration reported before IIS resolves it",
+      "status": "PASS"
+    },
+    {
+      "test": "SQL builder uses canonical dictionary keywords",
+      "status": "PASS"
+    },
+    {
+      "test": "existing config pair checked before directory/file writes",
+      "status": "PASS"
+    },
+    {
+      "test": "existing config mismatch never silently overwritten",
+      "status": "PASS"
+    },
+    {
+      "test": "config file write atomic and without replace",
+      "status": "PASS"
+    },
+    {
+      "test": "both generated files validated after writing",
+      "status": "PASS"
+    },
+    {
+      "test": "directory ACL creation uses managed API",
+      "status": "PASS"
+    },
+    {
+      "test": "native commands have explicit cwd and wait",
+      "status": "PASS"
+    },
+    {
+      "test": "no icacls launch: tools/Install-Web.ps1",
+      "status": "PASS"
+    },
+    {
+      "test": "no icacls launch: tools/Install-Agent.ps1",
+      "status": "PASS"
+    },
+    {
+      "test": "no icacls launch: tools/Enable-WindowsAuth.ps1",
+      "status": "PASS"
+    },
+    {
+      "test": "no icacls launch: tools/Install-AutoDiscovery.ps1",
+      "status": "PASS"
+    },
+    {
+      "test": "discovery respects PowerShell execution policy",
+      "status": "PASS"
+    },
+    {
+      "test": "agent initially Manual and stopped",
+      "status": "PASS"
+    },
+    {
+      "test": "fresh security check required before starting agent",
+      "status": "PASS"
+    },
+    {
+      "test": "Verify checks installed files and live health",
+      "status": "PASS"
+    },
+    {
+      "test": "live health does not accept HTTP 200 alone",
+      "status": "PASS"
+    },
+    {
+      "test": "CSRF no-op registered as protected write",
+      "status": "PASS"
+    },
+    {
+      "test": "CSRF no-op exits before SQL access",
+      "status": "PASS"
+    },
+    {
+      "test": "isolated HTTP request per call",
+      "status": "PASS"
+    },
+    {
+      "test": "negative CSRF tests target no-op action",
+      "status": "PASS"
+    },
+    {
+      "test": "real refresh POST requires QueueScan",
+      "status": "PASS"
+    },
+    {
+      "test": "positive CSRF control verifies no-op payload",
+      "status": "PASS"
+    },
+    {
+      "test": "invalid SQL defaults now fail verification",
+      "status": "PASS"
+    },
+    {
+      "test": "core schema verifier accepts extra named tables",
+      "status": "PASS"
+    },
+    {
+      "test": "existing source checkbox semantics retained",
+      "status": "PASS"
+    },
+    {
+      "test": "agent source exact copy: Program.cs",
+      "status": "PASS"
+    },
+    {
+      "test": "agent source exact copy: V3Core.cs",
+      "status": "PASS"
+    },
+    {
+      "test": "agent source exact copy: V3Import.cs",
+      "status": "PASS"
+    },
+    {
+      "test": "agent source exact copy: V3Monitoring.cs",
+      "status": "PASS"
+    },
+    {
+      "test": "agent source exact copy: V3Discovery.cs",
+      "status": "PASS"
+    },
+    {
+      "test": "standalone build checks exit and assembly metadata",
+      "status": "PASS"
+    },
+    {
+      "test": "new workflow test does not need SQL/IIS writes",
+      "status": "PASS"
+    },
+    {
+      "test": "CI includes actual future Windows workflow test",
+      "status": "PASS"
+    },
+    {
+      "test": "docs state Windows execution not performed here",
+      "status": "PASS"
+    }
+  ]
+}

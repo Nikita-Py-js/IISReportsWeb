@@ -128,11 +128,17 @@ function New-RestrictedDirectory {
 function Save-NewXml([xml]$Document,[string]$Destination) {
     $full = [IO.Path]::GetFullPath($Destination)
     if (Test-Path -LiteralPath $full) { throw "File exists, not overwritten: $full" }
-    [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($full))
+    $parent = Get-SetupDirectoryPath ([IO.Path]::GetDirectoryName($full))
+    if(-not [IO.Directory]::Exists($parent)){throw 'Create a restricted configuration directory before saving XML.'}
+    $temp = Join-Path $parent ([Guid]::NewGuid().ToString('N')+'.tmp')
     $settings = New-Object Xml.XmlWriterSettings
     $settings.Indent = $true; $settings.Encoding = New-Object Text.UTF8Encoding($true)
-    $writer = [Xml.XmlWriter]::Create($full,$settings)
-    try { $Document.Save($writer) } finally { $writer.Dispose() }
+    try {
+        $writer = [Xml.XmlWriter]::Create($temp,$settings)
+        try { $Document.Save($writer) } finally { $writer.Dispose() }
+        [xml]$check=[IO.File]::ReadAllText($temp)
+        [IO.File]::Move($temp,$full) # atomic, refuses overwrite even if a concurrent writer won
+    } finally { if([IO.File]::Exists($temp)){[IO.File]::Delete($temp)} }
 }
 function New-SqlConnectionString {
     param([string]$SqlServer,[string]$Database,[System.Management.Automation.PSCredential]$Credential,
@@ -140,6 +146,7 @@ function New-SqlConnectionString {
     Add-Type -AssemblyName System.Data
     if ([string]::IsNullOrWhiteSpace($SqlServer)) { throw 'SqlServer must not be empty.' }
     if ([string]::IsNullOrWhiteSpace($Database)) { throw 'Database must not be empty.' }
+    if ($SqlServer -ne $SqlServer.Trim() -or $SqlServer -match '(?i)https?://|[;\r\n]' -or $SqlServer.Contains('\\') -or $SqlServer.EndsWith('\')) { throw 'SqlServer must be a SQL instance, not a URL: localhost, HOST\INSTANCE, or tcp:HOST,PORT. Use one backslash.' }
 
     # IMPORTANT: SqlConnectionStringBuilder implements IDictionary. In Windows PowerShell,
     # `$builder.DataSource = ...` can be interpreted as dictionary-key assignment to
@@ -212,5 +219,135 @@ function Invoke-SqlFile {
                 } while($reader.NextResult())
             } finally { if($null -ne $reader){$reader.Dispose()};$cmd.Dispose() }
         } else { Invoke-SetupSql -Connection $Connection -Sql $batch }
+    }
+}
+
+# 3.1.1: reusable validation and native-process launch with an explicit working directory.
+function Assert-SetupFile([string]$Path,[string]$Purpose) {
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "$Purpose is missing: '$Path'. Run Install.ps1 -Step Config for configuration files, or -Step Build for build artifacts. Do not create an empty placeholder."
+    }
+}
+function Assert-SetupWindows {
+    if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT -or
+        $PSVersionTable.PSEdition -ne 'Desktop' -or $PSVersionTable.PSVersion -lt [version]'5.1' -or
+        -not [Environment]::Is64BitProcess) {
+        throw 'Use elevated Windows PowerShell 5.1 x64, not PowerShell 7, for Windows installation.'
+    }
+    Assert-Administrator
+}
+function Resolve-SetupIdentity([string]$Account) {
+    if ($Account -match '^S-1-') { return (New-Object Security.Principal.SecurityIdentifier -ArgumentList $Account) }
+    return (New-Object Security.Principal.NTAccount -ArgumentList $Account).Translate([Security.Principal.SecurityIdentifier])
+}
+function Set-SetupDirectoryAccess {
+    # Use ONLY on dedicated deployment directories created/owned by this project.
+    param([string]$Directory,[string[]]$ReadAccounts=@(),[string[]]$ModifyAccounts=@())
+    $full=Get-SetupDirectoryPath $Directory
+    if(-not [IO.Directory]::Exists($full)) { throw "Directory is missing: $full" }
+    $acl=New-Object Security.AccessControl.DirectorySecurity
+    $acl.SetAccessRuleProtection($true,$false)
+    $map=@{'S-1-5-32-544'='FullControl';'S-1-5-18'='FullControl'}
+    foreach($account in $ReadAccounts) { $id=(Resolve-SetupIdentity $account).Value;if(-not $map.ContainsKey($id)){$map[$id]='ReadAndExecute'} }
+    foreach($account in $ModifyAccounts) { $id=(Resolve-SetupIdentity $account).Value;if(-not $map.ContainsKey($id) -or $map[$id] -ne 'FullControl'){$map[$id]='Modify'} }
+    foreach($id in $map.Keys) {
+        $rule=New-Object Security.AccessControl.FileSystemAccessRule -ArgumentList @(
+            (Resolve-SetupIdentity $id),[Security.AccessControl.FileSystemRights]$map[$id],
+            [Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit',
+            [Security.AccessControl.PropagationFlags]::None,[Security.AccessControl.AccessControlType]::Allow)
+        [void]$acl.AddAccessRule($rule)
+    }
+    $acl.SetOwner((Resolve-SetupIdentity 'S-1-5-32-544'))
+    [IO.Directory]::SetAccessControl($full,$acl)
+}
+function Set-SetupFileAccess {
+    param([string]$Path,[string[]]$ReadAccounts=@())
+    Assert-SetupFile $Path 'Protected file'
+    $null=Get-SetupDirectoryPath ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($Path)))
+    if(([IO.File]::GetAttributes($Path) -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw 'Refusing a reparse-point file.'}
+    $acl=New-Object Security.AccessControl.FileSecurity
+    $acl.SetAccessRuleProtection($true,$false)
+    $map=@{'S-1-5-32-544'='FullControl';'S-1-5-18'='FullControl'}
+    foreach($account in $ReadAccounts){$id=(Resolve-SetupIdentity $account).Value;if(-not $map.ContainsKey($id)){$map[$id]='Read'}}
+    foreach($id in $map.Keys) {
+        [void]$acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule -ArgumentList @(
+            (Resolve-SetupIdentity $id),[Security.AccessControl.FileSystemRights]$map[$id],
+            [Security.AccessControl.AccessControlType]::Allow)))
+    }
+    $acl.SetOwner((Resolve-SetupIdentity 'S-1-5-32-544'))
+    [IO.File]::SetAccessControl([IO.Path]::GetFullPath($Path),$acl)
+}
+function Grant-SetupLogRead {
+    param([string]$Directory,[string]$Account)
+    $full=Get-SetupDirectoryPath $Directory
+    if(-not [IO.Directory]::Exists($full)){throw "Log directory is missing: $full"}
+    $acl=[IO.Directory]::GetAccessControl($full)
+    $rule=New-Object Security.AccessControl.FileSystemAccessRule -ArgumentList @(
+        (Resolve-SetupIdentity $Account),[Security.AccessControl.FileSystemRights]::ReadAndExecute,
+        [Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit',
+        [Security.AccessControl.PropagationFlags]::None,[Security.AccessControl.AccessControlType]::Allow)
+    [void]$acl.AddAccessRule($rule)
+    [IO.Directory]::SetAccessControl($full,$acl)
+}
+function ConvertTo-SetupNativeArgument([string]$Value) {
+    if($null -eq $Value -or $Value.Length -eq 0) { return '""' }
+    if($Value -notmatch '[\s"]'){return $Value}
+    # CommandLineToArgvW / C runtime quoting: double slashes before quotes and at end.
+    $escaped=[regex]::Replace($Value,'(\\*)"','$1$1\"')
+    $escaped=[regex]::Replace($escaped,'(\\+)$','$1$1')
+    return '"'+$escaped+'"'
+}
+function Invoke-SetupNative {
+    param([string]$FilePath,[string[]]$Arguments=@(),[int]$TimeoutSeconds=120)
+    Assert-SetupFile $FilePath 'Windows executable'
+    $psi=New-Object Diagnostics.ProcessStartInfo
+    $psi.FileName=[IO.Path]::GetFullPath($FilePath)
+    $psi.WorkingDirectory=[IO.Path]::GetDirectoryName($psi.FileName)
+    $psi.Arguments=(@($Arguments|ForEach-Object{ConvertTo-SetupNativeArgument $_}) -join ' ')
+    $psi.UseShellExecute=$false;$psi.CreateNoWindow=$true
+    $psi.RedirectStandardOutput=$true;$psi.RedirectStandardError=$true
+    $p=New-Object Diagnostics.Process;$p.StartInfo=$psi
+    try {
+        if(-not $p.Start()){throw 'Process failed to start.'}
+        $stdout=$p.StandardOutput.ReadToEndAsync();$stderr=$p.StandardError.ReadToEndAsync()
+        if(-not $p.WaitForExit($TimeoutSeconds*1000)){try{$p.Kill()}catch{};throw 'Native command timed out; inspect current Windows state before retrying.'}
+        $p.WaitForExit();$text=$stdout.Result;$err=$stderr.Result
+        if($text){Write-Host $text.TrimEnd()};if($err){Write-Host $err.TrimEnd()}
+        if($p.ExitCode -ne 0){throw "Windows command failed: $([IO.Path]::GetFileName($FilePath)), exit=$($p.ExitCode). See output above."}
+    }finally{$p.Dispose()}
+}
+function Get-SetupXmlSettings([string]$Path) {
+    Assert-SetupFile $Path 'Configuration'
+    [xml]$xml=[IO.File]::ReadAllText($Path)
+    $map=@{}
+    foreach($node in $xml.SelectNodes('/configuration/appSettings/add')) {
+        $key=$node.GetAttribute('key')
+        if($map.ContainsKey($key)){throw "Duplicate appSettings key in configuration: $key"}
+        $map[$key]=$node.GetAttribute('value')
+    }
+    if(-not $map.ContainsKey('ConnStr') -or [string]::IsNullOrWhiteSpace($map['ConnStr'])){throw "ConnStr is missing in $Path"}
+    return $map
+}
+function Get-SetupSqlBuilder([string]$ConnectionString) {
+    # Never include the supplied connection string in a diagnostic exception.
+    try { return (New-Object Data.SqlClient.SqlConnectionStringBuilder -ArgumentList $ConnectionString) }
+    catch { throw 'Cannot parse ConnStr. Expected SqlClient keys such as Data Source and Initial Catalog; the value was not printed.' }
+}
+function Assert-SetupBuild([string]$PackageRoot,[string]$BuildDirectory) {
+    Assert-SetupFile (Join-Path $BuildDirectory 'BUILDINFO.json') 'Successful build metadata'
+    $info=ConvertFrom-Json ([IO.File]::ReadAllText((Join-Path $BuildDirectory 'BUILDINFO.json')))
+    $version=[IO.File]::ReadAllText((Join-Path $PackageRoot 'VERSION')).Trim()
+    if(-not $info.unitTestsPassed -or $info.version -ne $version){throw 'Build is not successful or belongs to a different version. Run the Build step.'}
+    $required=@('IISReports.Agent.exe','IISReports.WebCore.dll','IISReports.HandlerTest.dll','UnitTests.exe','SqlIntegrationTests.exe','DiscoverySqlTests.exe')
+    foreach($name in $required){
+        $entry=@($info.artifacts|Where-Object{$_.name -eq $name})
+        if($entry.Count -ne 1){throw "Build metadata lacks artifact: $name"}
+        $path=Join-Path $BuildDirectory $name;Assert-SetupFile $path 'Compiled artifact'
+        if((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $entry[0].sha256){throw "Artifact changed: $name. Rebuild."}
+    }
+    if(@($info.sources).Count -eq 0){throw 'Build metadata has no source hashes.'}
+    foreach($source in $info.sources){
+        if($source.path.Contains('..') -or [IO.Path]::IsPathRooted($source.path)){throw 'Invalid source path in build metadata.'}
+        if((Get-FileHash -LiteralPath (Join-Path $PackageRoot $source.path) -Algorithm SHA256).Hash -ne $source.sha256){throw "Source changed after build: $($source.path). Rebuild."}
     }
 }

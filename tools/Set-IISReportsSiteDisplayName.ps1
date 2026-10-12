@@ -16,6 +16,7 @@ param(
     [string] $WebRoot = 'C:\inetpub\wwwroot\IISReportsV3'
 )
 $ErrorActionPreference = 'Stop'
+. "$PSScriptRoot\Setup.Common.ps1"
 $DisplayName = $DisplayName.Trim()
 if ($DisplayName.Length -lt 1 -or $DisplayName.Length -gt 120) {
     throw 'DisplayName must contain between 1 and 120 characters.'

@@ -7,6 +7,7 @@ param(
     [string]$BackupDirectory = "$env:ProgramData\IISReportsBackups"
 )
 $ErrorActionPreference='Stop'
+. "$PSScriptRoot\Setup.Common.ps1"
 $principal=New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if(-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {throw 'Run Windows PowerShell as Administrator.'}
 $appcmd=Join-Path $env:windir 'System32\inetsrv\appcmd.exe'
@@ -34,17 +35,12 @@ try {
 $backup=[IO.Path]::GetFullPath($BackupDirectory)
 if(($backup+'\').StartsWith($root+'\',[StringComparison]::OrdinalIgnoreCase)) {throw 'Backup directory must be outside the website.'}
 if(-not $PSCmdlet.ShouldProcess($IisPath,"Enable Windows Authentication, disable Anonymous, authorize $Editor")){return}
-New-Item -ItemType Directory -Path $backup -Force | Out-Null
-& icacls.exe $backup /inheritance:r /grant:r '*S-1-5-32-544:(OI)(CI)(F)' '*S-1-5-18:(OI)(CI)(F)' | Out-Null
-if($LASTEXITCODE -ne 0){throw 'Cannot restrict the config backup directory.'}
+New-RestrictedDirectory $backup
 $stamp=Get-Date -Format 'yyyyMMdd-HHmmss'
 Copy-Item -LiteralPath $file -Destination (Join-Path $backup "Web-$stamp.config")
-& $appcmd add backup "IISReports-$stamp"
-if($LASTEXITCODE -ne 0){throw 'IIS configuration backup failed.'}
-& $appcmd set config $IisPath '-section:system.webServer/security/authentication/windowsAuthentication' '/enabled:true' '/commit:apphost'
-if($LASTEXITCODE -ne 0){throw 'IIS rejected windowsAuthentication. Read the AppCmd error above; check role service, actual IIS path and configuration locks. No global section unlock was performed.'}
-& $appcmd set config $IisPath '-section:system.webServer/security/authentication/anonymousAuthentication' '/enabled:false' '/commit:apphost'
-if($LASTEXITCODE -ne 0){throw 'Anonymous Authentication could not be disabled. Restore from the named IIS backup if needed.'}
+Invoke-SetupNative -FilePath $appcmd -Arguments @('add','backup',"IISReports-$stamp")
+Invoke-SetupNative -FilePath $appcmd -Arguments @('set','config',$IisPath,'-section:system.webServer/security/authentication/windowsAuthentication','/enabled:true','/commit:apphost')
+Invoke-SetupNative -FilePath $appcmd -Arguments @('set','config',$IisPath,'-section:system.webServer/security/authentication/anonymousAuthentication','/enabled:false','/commit:apphost')
 [xml]$doc=[IO.File]::ReadAllText($file)
 function Ensure-Child([System.Xml.XmlElement]$Parent,[string]$Name) {
     $child=$Parent.SelectSingleNode($Name)

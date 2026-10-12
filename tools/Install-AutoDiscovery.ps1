@@ -60,8 +60,9 @@ Set-Acl -LiteralPath $dir -AclObject $acl
 foreach($child in Get-ChildItem -LiteralPath $dir -Force) {
     if($child.PSIsContainer -or (($child.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { throw 'Unexpected directory/link in protected inventory directory.' }
     # Reset any prior explicit file ACL to the protected parent. Do not grant write to the agent.
-    & icacls.exe $child.FullName /reset | Out-Null
-    if($LASTEXITCODE -ne 0){throw 'Cannot reset publisher file ACL.'}
+    $fileAcl=New-Object Security.AccessControl.FileSecurity
+    $fileAcl.SetAccessRuleProtection($false,$false)
+    [IO.File]::SetAccessControl($child.FullName,$fileAcl)
 }
 Copy-Item -LiteralPath "$root\discovery\Export-IISInventory.ps1" -Destination (Join-Path $dir 'Export-IISInventory.ps1') -Force
 $settings=[ordered]@{agentSid=$sid.Value;grantAgentRead=(-not [bool]$NoGrantLogRead)}
@@ -69,7 +70,7 @@ $settings=[ordered]@{agentSid=$sid.Value;grantAgentRead=(-not [bool]$NoGrantLogR
 # Run the same script once now, so metadata errors are visible before service startup.
 & (Join-Path $dir 'Export-IISInventory.ps1')
 $ps=Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
-$arguments='-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "'+(Join-Path $dir 'Export-IISInventory.ps1')+'"'
+$arguments='-NoProfile -NonInteractive -File "'+(Join-Path $dir 'Export-IISInventory.ps1')+'"'
 $action=New-ScheduledTaskAction -Execute $ps -Argument $arguments
 $trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes)
 $startup=New-ScheduledTaskTrigger -AtStartup

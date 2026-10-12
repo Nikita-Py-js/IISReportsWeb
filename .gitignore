@@ -27,3 +27,6 @@ agent/source/build/
 __pycache__/
 .vs/
 *.user
+
+# Saved deployment settings outside repository; never collect them in releases
+*.setup.psd1

@@ -1,4 +1,4 @@
-# Regression test for the installer SQL connection-string builder. Does not connect to SQL.
+﻿# Regression test for the installer SQL connection-string builder. Does not connect to SQL.
 [CmdletBinding()]
 param()
 $ErrorActionPreference = 'Stop'

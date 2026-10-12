@@ -148,7 +148,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $out 'LAST-BUILD-LOG.txt'), $script:BuildLogPath, $script:BuildUtf8)
     # A failed rebuild must never leave a successful build marker behind.
     if (Test-Path -LiteralPath $buildInfoPath) { Remove-Item -LiteralPath $buildInfoPath }
-    Write-BuildLog 'IIS Reports 3.1.0 BUILD-FIX1'
+    Write-BuildLog 'IIS Reports 3.1.1 BUILD-FIX1'
     Write-BuildLog ('Package: ' + $root)
     Write-BuildLog ('Output: ' + $out)
     Write-BuildLog ('PowerShell: ' + $PSVersionTable.PSVersion.ToString())

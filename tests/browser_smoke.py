@@ -24,7 +24,7 @@ def run(binary):
             url=urlparse(handler.request.url)
             if url.path.endswith('Reports.ashx'):
                 action=parse_qs(url.query).get('action',[''])[0];code=200
-                identity={'mode':'windows','identity':'TEST\\Operator','isAuthenticated':True,'authenticationType':'Negotiate','canRead':state['read'],'canEdit':state['editor'],'denialCode':None if state['read'] else 'reader_role_required','processIdentity':'IIS APPPOOL\\IISReports','version':'3.1.0'}
+                identity={'mode':'windows','identity':'TEST\\Operator','isAuthenticated':True,'authenticationType':'Negotiate','canRead':state['read'],'canEdit':state['editor'],'denialCode':None if state['read'] else 'reader_role_required','processIdentity':'IIS APPPOOL\\IISReports','version':'3.1.1'}
                 lists={'clients','users','targets','methods','user-agents','referers','slow-requests','slow-urls','errors-5xx-by-url','check-results','incident-events','audit','parse-errors'}
                 if handler.request.method=='POST':
                     state['posts'].append((action,json.loads(handler.request.post_data or '{}'),handler.request.headers.get('x-iisreports-csrf')))

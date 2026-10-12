@@ -5,6 +5,7 @@
 .gitignore
 CHANGELOG.md
 CONTRIBUTING.md
+Install.ps1
 NOTICE.md
 README.md
 SECURITY.md
@@ -36,11 +37,15 @@ docs/OPERATIONS.md
 docs/PREREQUISITES.md
 docs/REFERENCES.md
 docs/SECURITY.md
+docs/SETTINGS.md
 docs/SQL-SCHEMA-FIX.md
 docs/TESTING.md
 docs/TROUBLESHOOTING.md
 docs/UPGRADING.md
 docs/images/sources.png
+setup/Https.psd1
+setup/LocalHttp.psd1
+setup/ReverseProxy.psd1
 sql/001-v3-schema.sql
 sql/002-local-windows-permissions.sql
 sql/003-v3-verify.sql
@@ -48,6 +53,7 @@ sql/004-v3-defaults-audit.sql
 sql/005-auto-sources.sql
 sql/006-auto-sources-verify.sql
 tests/DiscoverySqlTests.cs
+tests/RELEASE-VALIDATION.json
 tests/SqlIntegrationTests.cs
 tests/UnitTests.cs
 tests/browser-results.json
@@ -56,9 +62,11 @@ tests/build-driver-static-results.json
 tests/check_build_driver.py
 tests/check_setup_hotfix.py
 tests/consistency-results.json
-tests/release-validation.json
+tests/install-contract-results.json
+tests/schema-verifier-results.txt
 tests/setup-hotfix-static-results.json
 tests/sources-preview.png
+tests/test_install_contract.py
 tests/test_schema_verifier.py
 tests/validate_release.py
 tools/Build-And-Test.ps1
@@ -73,6 +81,7 @@ tools/Install-Agent.ps1
 tools/Install-AutoDiscovery.ps1
 tools/Install-Prerequisites.ps1
 tools/Install-Web.ps1
+tools/Install.Plan.ps1
 tools/Make-Windows-Release.ps1
 tools/New-InstallConfig.ps1
 tools/Register-LogSource.ps1
@@ -80,7 +89,10 @@ tools/Set-IISReportsPublicOrigin.ps1
 tools/Set-IISReportsSiteDisplayName.ps1
 tools/Setup.Common.ps1
 tools/Test-DiscoverySql.ps1
+tools/Test-Health.ps1
 tools/Test-Http.ps1
+tools/Test-InstallConfig.ps1
+tools/Test-InstallWorkflow.ps1
 tools/Test-PowerShellSyntax.ps1
 tools/Test-SetupPaths.ps1
 tools/Test-Sql.ps1

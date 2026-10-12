@@ -10,6 +10,8 @@ INSERT @Defaults VALUES
  (N'Jobs', N'State', N'queued'),
  (N'Incidents', N'State', N'open'),
  (N'NotificationOutbox', N'State', N'pending');
+DECLARE @Results TABLE(TableName sysname,ColumnName sysname,ExpectedValue nvarchar(32),ActualDefinition nvarchar(max),AuditStatus nvarchar(80));
+INSERT @Results
 SELECT e.TableName, e.ColumnName, e.ExpectedValue,
        d.definition AS ActualDefinition,
        CASE WHEN t.object_id IS NULL OR col.column_id IS NULL THEN N'MISSING COLUMN'
@@ -23,7 +25,10 @@ FROM @Defaults e
 LEFT JOIN sys.tables t ON t.name=e.TableName AND t.schema_id=SCHEMA_ID(N'ir3')
 LEFT JOIN sys.columns col ON col.object_id=t.object_id AND col.name=e.ColumnName
 LEFT JOIN sys.default_constraints d ON d.parent_object_id=col.object_id AND d.parent_column_id=col.column_id
-ORDER BY e.TableName, e.ColumnName;
+;
+SELECT * FROM @Results ORDER BY TableName,ColumnName;
+IF EXISTS(SELECT 1 FROM @Results WHERE AuditStatus<>N'OK')
+ THROW 51040,'Default-constraint verification failed. Review the audit rows; no objects were modified.',1;
 -- Actual existing job states and the current queue, including unexpected state values:
 IF OBJECT_ID(N'ir3.Jobs', N'U') IS NOT NULL
     EXEC sys.sp_executesql N'SELECT State, COUNT_BIG(*) AS JobCount FROM ir3.Jobs GROUP BY State ORDER BY State;';

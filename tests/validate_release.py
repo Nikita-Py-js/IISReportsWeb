@@ -11,7 +11,7 @@ def run(root):
     results=[]
     def check(name, value):
         results.append({'test':name,'status':'PASS' if value else 'FAIL'})
-    check('release version', (root/'VERSION').read_text().strip()=='3.1.0')
+    check('release version', (root/'VERSION').read_text().strip()=='3.1.1')
     for name in ('Program.cs','V3Core.cs','V3Import.cs','V3Monitoring.cs','V3Discovery.cs'):
         canonical=root/('agent/Program.cs' if name=='Program.cs' else 'web/App_Code/'+name)
         check('standalone source matches '+name, canonical.read_bytes()==(root/'agent/source'/name).read_bytes())

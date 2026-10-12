@@ -6,8 +6,8 @@ using System.ServiceProcess;
 using System.Threading;
 using IISReports.V3;
 
-[assembly: System.Reflection.AssemblyVersion("3.1.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("3.1.0.0")]
+[assembly: System.Reflection.AssemblyVersion("3.1.1.0")]
+[assembly: System.Reflection.AssemblyFileVersion("3.1.1.0")]
 
 namespace IISReports.Agent
 {
@@ -19,7 +19,7 @@ namespace IISReports.Agent
         private void Beat()
         {
             if(stop.WaitOne(0))throw new OperationCanceledException();
-            Store.Exec(c,null,"UPDATE ir3.AgentState SET HeartbeatUtc=@t,MachineName=@m,Version='3.1.0' WHERE Id=1","@t",DateTime.UtcNow,"@m",Environment.MachineName);
+            Store.Exec(c,null,"UPDATE ir3.AgentState SET HeartbeatUtc=@t,MachineName=@m,Version='3.1.1' WHERE Id=1","@t",DateTime.UtcNow,"@m",Environment.MachineName);
         }
         public void Run(bool once)
         {
@@ -36,7 +36,7 @@ namespace IISReports.Agent
  @Resource=N'IISReports.v3.agent',@LockMode='Exclusive',@LockOwner='Session',@LockTimeout=0; SELECT @r;"));
                         if(locked<0)throw new InvalidOperationException("Another IISReports v3 agent already owns the database lock.");
                         Store.Exec(c,null,@"IF NOT EXISTS(SELECT 1 FROM ir3.AgentState WHERE Id=1)
- INSERT ir3.AgentState(Id,MachineName,HeartbeatUtc,State,Version) VALUES(1,@m,@now,'starting','3.1.0');
+ INSERT ir3.AgentState(Id,MachineName,HeartbeatUtc,State,Version) VALUES(1,@m,@now,'starting','3.1.1');
  UPDATE ir3.AgentState SET State='running',LastError=NULL,MachineName=@m,HeartbeatUtc=@now WHERE Id=1;
  UPDATE ir3.Jobs SET State='queued',Result='Resumed after agent restart.' WHERE State='running';
  UPDATE ir3.NotificationOutbox SET State='pending' WHERE State='sending';

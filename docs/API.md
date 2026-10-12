@@ -1,8 +1,18 @@
-# API 3.1.0
+# API 3.1.1
 
 [README](../README.md)
 
 Базовый адрес: `Reports.ashx?action=...`. GET только для чтения; операционные POST требуют Windows-роли редактора, CSRF-cookie/заголовка и Origin. Ответы JSON, время UTC. SQL-даты операционных API — ISO 8601. Старые аналитические API сохраняют формат дат, поддерживаемый интерфейсом.
+
+## Новое в 3.1.1: проверка CSRF без побочных действий
+
+`POST Reports.ashx?action=csrf-check` требует роль оператора, правильный Origin,
+заголовок `X-IISReports-CSRF` и соответствующую cookie.
+
+Успешный ответ: `{"ok":true,"validated":true,"mutation":false}`.
+Обработчик возвращает его до открытия SQL-соединения и не добавляет задания.
+`Test-Http.ps1` использует этот endpoint для отрицательных и положительной проверок.
+GET возвращает 405. Обычный `refresh` по-прежнему ставит scan в очередь при корректном POST.
 
 ## Новые GET
 
@@ -33,7 +43,7 @@
 - `refresh`: тело `{}`; создаёт задание scan; HTTP 202.
 - `job-create`: `{"kind":"verify","fileId":1}`; kind: scan, verify, replay, new-generation. Для scan fileId не нужен. HTTP 202.
 - `check-save`: поля редактора, `id` отсутствует для нового объекта, `revision` обязателен при обновлении. HTTP 409 при конфликте версии.
-- `rule-save`: аналогично, метрики указаны в README.
+- `rule-save`: аналогично, метрики перечислены в [OPERATIONS.md](OPERATIONS.md).
 - `incident-action`: `{"id":"GUID","action":"ack"}`; действия ack, close (после восстановления), cancel (ручное закрытие без подтверждённого восстановления).
 - `notification-test`: `{}`; только ставит тестовое событие в очередь.
 - `notification-retry`: `{"id":"GUID"}`; повтор failed-сообщения.

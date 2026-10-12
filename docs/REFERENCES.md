@@ -21,7 +21,7 @@
 
 Перед установкой проверяйте актуальную поддержку и лицензию конкретной версии ОС, SQL и используемой базы GeoIP/ASN. Не загружайте установщики из случайных ссылок в issue.
 
-## Автоматические источники 3.1.0
+## Автоматические источники 3.1.1
 
 - [IIS: per-site logFile, форматы, каталоги и File/ETW](https://learn.microsoft.com/en-us/iis/configuration/system.applicationhost/sites/site/logfile/).
 - [Microsoft.Web.Administration.SiteLogFile](https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.administration.sitelogfile?view=iis-dotnet).
@@ -30,3 +30,11 @@
 - [GRANT прав на отдельные столбцы SQL](https://learn.microsoft.com/en-us/sql/t-sql/statements/grant-object-permissions-transact-sql?view=sql-server-ver17).
 
 Документация Microsoft описывает платформу. Конкретные интервалы, поведение флажков, snapshot и SQL Revision — реализация этого проекта, проверяемая его тестами.
+
+## Основания для изменений установщика 3.1.1
+
+- [Import-PowerShellDataFile: чтение данных без выполнения кода](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/import-powershelldatafile)
+- [Windows Authentication в IIS](https://learn.microsoft.com/en-us/iis/configuration/system.webserver/security/authentication/windowsauthentication/)
+- [OWASP: CSRF Prevention](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
+
+Документация платформ подтверждает свойства механизмов, но не является результатом тестирования этого проекта. Фактически выполненные проверки перечислены в TESTING.md и tests/RELEASE-VALIDATION.json.

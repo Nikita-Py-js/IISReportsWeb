@@ -23,7 +23,7 @@ check('managed creation and update','[IO.Directory]::CreateDirectory($full,$acl)
 check('resultant DACL verified','Test-RestrictedDirectoryAcl -Acl $actual' in helper)
 check('no files written by helper',not re.search(r'Save-NewXml|WriteAllText|WriteAllBytes|XmlWriter',helper))
 check('templates validated before ACL change',config.index('[xml]$agent')<config.index('New-RestrictedDirectory -Directory $dir'))
-check('ACL checked before configs saved',config.index('New-RestrictedDirectory -Directory $dir')<config.index('Save-NewXml $web'))
+check('ACL checked before configs saved',config.index('New-RestrictedDirectory -Directory $dir')<config.index('Save-NewXml $plan.Document'))
 check('working config overwrite guard retained','Configuration already exists:' in config)
 check('SQL builder FIX1 retained',"$b['Data Source'] = $SqlServer" in common and "$b['Encrypt'] = $true" in common)
 query=probe.split("$cmd.CommandText=@'",1)[1].split("'@",1)[0]

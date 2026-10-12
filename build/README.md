@@ -1,17 +1,23 @@
-# Результаты Windows-сборки
+# Каталог результатов сборки
 
-В исходной поставке эта папка не содержит готового EXE.
+В исходной поставке нет готовых EXE/DLL. Этот каталог содержит только данную инструкцию.
 
-Из корня проекта на Windows:
+На Windows выполните `Install.ps1 -SettingsFile <ваш .psd1> -Step Build`
+либо `tools/Build-And-Test.ps1`. После успешных локальных тестов появятся:
 
-```powershell
-.\tools\Build-And-Test.ps1
-```
+- IISReports.Agent.exe
+- IISReports.WebCore.dll
+- IISReports.HandlerTest.dll
+- UnitTests.exe
+- SqlIntegrationTests.exe
+- DiscoverySqlTests.exe
+- BUILDINFO.json
 
-Будут созданы EXE службы, тестовые EXE/DLL и BUILDINFO.json. Только `IISReports.Agent.exe` нужен для установки службы; конфигурация создаётся отдельно.
+Файлы `.dll` здесь служат для проверки компиляции, не копируйте их в `web/Bin`.
+Установщику необходим полный результат успешной сборки, а не один вручную скопированный EXE.
 
-Не публикуйте тестовые DLL в `web/Bin`: App_Code уже компилирует те же классы. Для полного Windows-дистрибутива с EXE:
+Журналы — в `build/logs`, путь последнего журнала — `build/LAST-BUILD-LOG.txt`.
+Ошибка сборки не должна обходиться запуском старого UnitTests.exe.
 
-```powershell
-.\tools\Make-Windows-Release.ps1 -SkipBuild
-```
+SQL-интеграционные EXE запускайте только на одноразовой тестовой базе по документации.
+`Make-Windows-Release.ps1 -SkipBuild` упаковывает проверенные бинарные файлы после успешного Build.
