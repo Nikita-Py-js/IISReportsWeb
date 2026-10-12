@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>IIS Reports v3.1.1</title>
+<title>IIS Reports Simple 3.2</title>
 <style>
   :root{--bg:#f5f7fa;--card:#fff;--text:#1f2937;--muted:#6b7280;--ok:#059669;
         --warn:#d97706;--err:#dc2626;--blue:#3b82f6;--violet:#6366f1;--border:#eef1f5}
@@ -106,11 +106,11 @@
   .quick button{background:#eef2f7;color:#374151;padding:6px 10px;font-size:12px;border-radius:16px}
   .quick button:hover{background:#dbeafe}
 </style>
-<meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="v3.css">
+<link rel="stylesheet" href="v3.css">
 </head>
 <body>
 
-<h1>IIS Reports v3.1.1 <span id="health" class="health-dot" title="Проверка…"></span></h1>
+<h1>IIS Reports Simple 3.2 <span id="health" class="health-dot" title="Проверка…"></span></h1>
 <div class="subtitle" id="subtitle">Загрузка…</div>
 
 <pre id="api-error" hidden role="alert" style="white-space:pre-wrap;overflow-wrap:anywhere;padding:14px;border:1px solid var(--err);border-radius:8px"></pre>
@@ -118,10 +118,14 @@
   <label>Сайт:
     <select id="site-select"><option value="0">Все сайты</option></select>
   </label>
-  <button onclick="refresh()">↻ Обновить данные</button>
+  <button id="refresh-button" onclick="refresh()">Обновить / импортировать</button>
+  <label><input id="auto-refresh" type="checkbox" checked style="min-width:0;width:auto"> Автоимпорт каждые 30 секунд</label>
   <button class="ghost" onclick="copyLink()">🔗 Скопировать ссылку</button>
 </div>
 
+<div class="hint" id="import-note">Службы не нужны. Автоимпорт работает, пока эта вкладка открыта и активна.
+При закрытом браузере история доступна, но новые записи не импортируются.</div>
+<div class="hint" id="import-progress" role="status"></div>
 <div class="tabs" id="tabs">
   <button data-tab="overview" class="active">Обзор</button>
   <button data-tab="clients">Клиенты</button>
@@ -137,11 +141,11 @@
   <button data-tab="alerts">🔔 Алерты</button>
   <button data-tab="system">Система</button>
 
-  <button data-tab="agent">Сборщик</button>
+  <button data-tab="agent">Состояние импорта</button>
   <button data-tab="checks">Проверки сайтов</button>
   <button data-tab="incidents">Инциденты</button>
-  <button data-tab="queue" class="operator-only">Задания / доставка</button>
-  <button data-tab="access">Windows / CSRF</button>
+  <button data-tab="queue">Уведомления</button>
+
 </div>
 
 <div id="tab-overview">
@@ -232,7 +236,7 @@
 <div id="tab-sources" hidden>
 <section>
   <h2>Какие сайты мониторить</h2>
-  <p class="hint">Новые локальные сайты IIS обнаруживаются автоматически и включаются по умолчанию.
+  <p class="hint">Каталоги W3SVC* в настроенных папках журналов обнаруживаются при импорте. Новые источники включены по умолчанию.
   Снятие флажка останавливает импорт, но сохраняет историю и контрольные точки. Нажмите «Сохранить выбор».</p>
   <div id="discovery-state" role="status"></div>
   <div class="toolbar">
@@ -246,9 +250,9 @@
   <div id="source-roots" class="section-scroll"></div>
 </section>
 <section><h2>Файлы, контрольные точки и целостность</h2>
-  <p class="hint">Все новые и ротированные .log-файлы включённых источников импортируются агентом.
-  Verify проверяет SHA-256 всех сохранённых блоков. Replay и New version доступны только для включённого доступного источника.
-  Пауза не отключает запись журналов в IIS и не меняет правила алертов.</p>
+  <p class="hint">Новые .log-файлы включённых источников импортируются при обновлении страницы.
+  Verify проверяет SHA-256 сохранённых блоков; Versions показывает историю версий.
+  Пауза не удаляет записи из MSSQL и не отключает журналирование IIS. Замена изменённого файла автоматически не выполняется.</p>
   <button class="ghost" data-v3-action="parse-errors">Ошибки парсинга</button>
   <div id="sources-summary" class="hint"></div>
   <div class="section-scroll"><table><thead><tr><th>Файл</th><th>Версия</th><th>Статус</th><th>Позиция / байт</th><th>Строк / ошибок</th><th>Проверка</th><th>Действия</th></tr></thead><tbody id="sources-body"></tbody></table></div>
@@ -359,7 +363,7 @@
 <div id="tab-alerts" hidden><section><h2>Правила алертов</h2>
 <div class="hint">Правила хранятся в MSSQL. Оценка по полным минутам UTC, условие: метрика &gt; порог. Результаты открывают инциденты.</div>
 <button data-v3-action="new-rule" class="operator-only">Добавить правило</button> <button class="ghost" onclick="loadAlerts()">Обновить</button>
-<div id="rules-table" class="section-scroll"></div><form id="rule-form" class="v3-form" hidden></form></section></div>
+<p class="hint">Правила оцениваются после импорта. Без открытой страницы или ручного запроса новые срабатывания не проверяются.</p><div id="rules-table" class="section-scroll"></div><form id="rule-form" class="v3-form" hidden></form></section></div>
 <div id="tab-system" hidden>
   <div class="flex2">
     <section>
@@ -406,7 +410,7 @@
   </section>
 </div>
 
-<div id="tab-agent" hidden><section><h2>Сборщик v3</h2><div class="hint">Windows-служба IISReportsAgentV3. Открытый браузер для работы не нужен.</div><button onclick="loadV3Tab('agent')">Обновить</button><div id="agent-status"></div></section></div><div id="tab-checks" hidden><section><h2>Активные HTTP-проверки</h2><div class="hint">GET, без передачи Windows-паролей. Хосты и порты должны быть разрешены в настройках web и agent.</div><button data-v3-action="new-check" class="operator-only">Добавить</button> <button class="ghost" onclick="loadV3Tab('checks')">Обновить</button><div id="checks-table" class="section-scroll"></div><form id="check-form" class="v3-form" hidden></form></section></div><div id="tab-incidents" hidden><section><h2>Центр инцидентов</h2><div class="hint">open → acknowledged → resolved → closed. Ручное закрытие не означает подтверждённое восстановление.</div><button onclick="loadV3Tab('incidents')">Обновить</button><div id="incidents-table" class="section-scroll"></div></section></div><div id="tab-queue" hidden><section><h2>Задания и уведомления</h2><button onclick="loadV3Tab('queue')">Обновить</button> <button data-v3-action="test-notification">Тест доставки</button><div class="hint">Без webhook в конфиге сборщика сообщения остаются pending. Доставка может повторяться; eventId стабилен.</div><h3>Задания</h3><div id="jobs-table" class="section-scroll"></div><h3>Доставка</h3><div id="outbox-table" class="section-scroll"></div></section></div><div id="tab-access" hidden><section><h2>Windows Authentication / CSRF</h2><button onclick="loadV3Tab('access')">Whoami</button> <button data-v3-action="renew-csrf">Обновить CSRF</button><div class="hint">Учётная запись браузера и пула IIS — разные идентичности. Пароль в эту панель вводить не нужно.</div><pre id="access-info" class="v3-pre"></pre></section></div>
+<div id="tab-agent" hidden><section><h2>Состояние импорта</h2><div class="hint">Импорт выполняется внутри запроса к IIS. Фоновая служба и Планировщик не используются.</div><button onclick="loadV3Tab('agent')">Обновить</button><div id="agent-status"></div></section></div><div id="tab-checks" hidden><section><h2>Активные HTTP-проверки</h2><div class="hint">GET, без передачи Windows-паролей. Не выполняются по расписанию. Кнопка «Выполнить» запускает одну проверку и одну отправку. Направления разрешаются в Web.config.</div><button data-v3-action="run-monitoring">Выполнить проверку / отправку</button> <button data-v3-action="new-check">Добавить</button> <button class="ghost" onclick="loadV3Tab('checks')">Обновить</button><div id="checks-table" class="section-scroll"></div><form id="check-form" class="v3-form" hidden></form></section></div><div id="tab-incidents" hidden><section><h2>Центр инцидентов</h2><div class="hint">open → acknowledged → resolved → closed. Ручное закрытие не означает подтверждённое восстановление.</div><button onclick="loadV3Tab('incidents')">Обновить</button><div id="incidents-table" class="section-scroll"></div></section></div><div id="tab-queue" hidden><section><h2>Уведомления</h2><button onclick="loadV3Tab('queue')">Обновить</button> <button data-v3-action="test-notification">Тест доставки</button><div class="hint">Отправка — только по кнопке «Выполнить». Без webhook в Web.config сообщения остаются pending. eventId сохраняется при повторе.</div><button data-v3-action="run-monitoring">Выполнить проверку / отправку</button><h3>Доставка</h3><div id="outbox-table" class="section-scroll"></div></section></div>
 <dialog id="v3-dialog"><button onclick="this.closest('dialog').close()">Закрыть</button><h2 id="detail-title"></h2><pre id="detail-body" class="v3-pre"></pre></dialog>
 <script>
 const $ = id => document.getElementById(id);
@@ -456,7 +460,6 @@ function countryCell(code) {
 
 let logsState = { page: 1, pageSize: 100, total: 0 };
 let logsRequestId = 0;
-let csrfToken = '';
 let accessInfo = { canEdit:false,mode:'local' };
 let sourcesSnapshot = [];
 let selectedCategories = []; // [2,3,4,5]
@@ -567,15 +570,7 @@ function switchTab(name) {
   document.querySelectorAll('[id^="tab-"]').forEach(el => el.hidden = true);
   const panel = $('tab-' + name);
   if (panel) panel.hidden = false;
-  if (name === 'logs') loadLogs();
-  if (name === 'security') loadSecurity();
-  if (name === 'alerts') loadAlerts();
-  if (name === 'errors5xx') loadErrors5xx();
-  if (name === 'diagnostics') loadDiagnostics();
-  if (name === 'performance') loadPerformance();
-  if (name === 'sources') loadSources();
-  if (['agent','checks','incidents','queue','access'].includes(name)) loadV3Tab(name);
-  if (name === 'bots') loadBots();
+  loadAll().catch(showError);
   applyStateToHash();
 }
 
@@ -701,15 +696,11 @@ document.addEventListener('click', e => {
 // ---- Health ----
 async function loadHealth() {
   try {
-    const h = await api('health', null, { noSite: true });
-    const dot = $('health');
-    dot.className = 'health-dot ' + (h.status || 'stale');
-    dot.title = (h.databaseError ? h.databaseError + '\n' : '') + `Обновлено: ${fmt(h.lastParsed)} (agent: ${h.agentOnline ? 'online' : 'offline'}, heartbeat ${h.heartbeatAgeSeconds ?? '—'} s)\n` +
-                `Записей в БД: ${h.totalEntries}\n` +
-                `Ошибок: ${(h.errors||[]).length}`;
-  } catch (e) {
-    $('health').className = 'health-dot stale';
-    $('health').title = 'Ошибка: ' + e.message;
+    const h=await api('health',null,{noSite:true});
+    $('health').className='health-dot '+(h.status||'warn');
+    $('health').title=`Импорт в IIS; записей: ${num(h.totalEntries)}; последнее чтение: ${fmt(h.lastParsed)}`;
+  } catch(e) {
+    $('health').className='health-dot stale'; $('health').title=e.message;
   }
 }
 
@@ -1051,35 +1042,28 @@ function exportCsv() {
 
 let refreshing = false;
 async function refresh() {
-  if (refreshing) return;
-  refreshing = true;
-  clearError();
+  if(refreshing)return;
+  refreshing=true; clearError(); $('refresh-button').disabled=true;
+  $('import-progress').textContent='Проверка каталогов и импорт порции записей…';
   try {
-    const result = await api('refresh', null, { noSite: true, method: 'POST' });
-    flash('Scan queued in the Windows agent. Check the Jobs tab.');
-    await loadSites();
-    await loadAll();
-    await loadHealth();
-    if (result.errors && result.errors.length) showImportErrors(result.errors);
-  } catch (error) { showError(error); }
-  finally { refreshing = false; }
+    const r=await api('refresh',null,{noSite:true,method:'POST'});
+    $('import-progress').textContent=r.busy ? 'Другое обновление уже выполняется.' :
+      `Обработано строк: ${num(r.rowsProcessed)}; файлов: ${num(r.filesProcessed)}; ожидают дочитывания: ${num(r.pendingFiles)}.`;
+    await loadSites(); await loadAll(); await loadHealth();
+    if(r.errors?.length)showImportErrors(r.errors);
+    return r;
+  } catch(e) {showError(e);$('import-progress').textContent='Импорт остановился с ошибкой. Уже сохранённые записи не удалены.';}
+  finally {refreshing=false; $('refresh-button').disabled=false;}
 }
 
 async function loadAll() {
-  const jobs = [loadOverview, loadClients, loadUsers, loadTargets, loadSystem];
-  if (!$('tab-logs').hidden) jobs.push(loadLogs);
-  if (!$('tab-security').hidden) jobs.push(loadSecurity);
-  if (!$('tab-alerts').hidden) jobs.push(loadAlerts);
-  if (!$('tab-errors5xx').hidden) jobs.push(loadErrors5xx);
-  if (!$('tab-diagnostics').hidden) jobs.push(loadDiagnostics);
-  if (!$('tab-performance').hidden) jobs.push(loadPerformance);
-  if (!$('tab-sources').hidden) jobs.push(loadSources);
-  if (!$('tab-bots').hidden) jobs.push(loadBots);
-  const errors = [];
-  await Promise.all(jobs.map(job => job().catch(error => errors.push(error.message))));
-  if (errors.length) showError(errors.join('\n'));
+  const active=document.querySelector('#tabs button.active')?.dataset.tab||'overview';
+  const loads={overview:loadOverview,clients:loadClients,users:loadUsers,targets:loadTargets,
+    system:loadSystem,logs:loadLogs,security:loadSecurity,alerts:loadAlerts,errors5xx:loadErrors5xx,
+    diagnostics:loadDiagnostics,performance:loadPerformance,sources:loadSources,bots:loadBots};
+  if(loads[active]) await loads[active]();
+  else await loadV3Tab(active);
 }
-
 
 // ---- Extended diagnostics & performance ----
 const emptyRow = n => `<tr><td colspan="${n}">Нет данных</td></tr>`;

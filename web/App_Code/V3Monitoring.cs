@@ -98,12 +98,12 @@ namespace IISReports.V3
                 { Store.Exec(c,tx,"UPDATE ir3.Incidents SET UpdatedUtc=@t,Detail=@d WHERE Id=@id","@t",now,"@d",Settings.Clip(detail,2048),"@id",(Guid)current[0]["Id"]);return; }
                 Guid id=Guid.NewGuid();Store.Exec(c,tx,@"INSERT ir3.Incidents(Id,EntityKey,Title,State,Active,OpenedUtc,UpdatedUtc,Detail)
  VALUES(@id,@key,@title,'open',1,@now,@now,@d)","@id",id,"@key",key,"@title",Settings.Clip(title,256),"@now",now,"@d",Settings.Clip(detail,2048));
-                Event(c,tx,id,"opened","agent",title+": "+detail,true);
+                Event(c,tx,id,"opened","web-request",title+": "+detail,true);
             }
             else if(current.Count>0)
             {
                 Guid id=(Guid)current[0]["Id"];Store.Exec(c,tx,"UPDATE ir3.Incidents SET State='resolved',Active=0,ResolvedUtc=@t,UpdatedUtc=@t,Detail=@d WHERE Id=@id","@t",now,"@d",Settings.Clip(detail,2048),"@id",id);
-                Event(c,tx,id,"resolved","agent",title+": "+detail,true);
+                Event(c,tx,id,"resolved","web-request",title+": "+detail,true);
             }
         }
         public static void Event(SqlConnection c,SqlTransaction tx,Guid incidentId,string kind,string actor,string detail,bool notify)
@@ -141,7 +141,7 @@ namespace IISReports.V3
         private void Beat(){if(beat!=null)beat();}
         public void RunChecks()
         {
-            var checks=Store.Rows(c,null,"SELECT TOP(10) * FROM ir3.Checks WHERE Enabled=1 AND NextDueUtc<=SYSUTCDATETIME() ORDER BY NextDueUtc");
+            var checks=Store.Rows(c,null,"SELECT TOP(1) * FROM ir3.Checks WHERE Enabled=1 AND NextDueUtc<=SYSUTCDATETIME() ORDER BY NextDueUtc");
             foreach(var check in checks)
             {
                 Beat();var result=Probes.Run(check);Guid id=(Guid)check["Id"];
@@ -177,7 +177,7 @@ LastMessage=@d,NextDueUtc=DATEADD(SECOND,IntervalSeconds,@now) WHERE Id=@id",
                 DateTime start=end.AddMinutes(-Store.Num(rule["WindowMinutes"]));
                 if(metric=="import_stale_minutes")
                 {
-                    object last=Store.Scalar(c,null,"SELECT LastSuccessfulScanUtc FROM ir3.AgentState WHERE Id=1");
+                    object last=Store.Scalar(c,null,"SELECT MAX(FinishedUtc) FROM ir3.ImportRuns WHERE Kind='web' AND Status IN ('ok','warning')");
                     value=last==null?1000000:Math.Max(0,(now-DateTime.SpecifyKind((DateTime)last,DateTimeKind.Utc)).TotalMinutes);samples=1;
                 }
                 else
@@ -222,10 +222,10 @@ LastEvaluatedUtc=@t,LastMessage=@d,NextDueUtc=DATEADD(MINUTE,1,@end) WHERE RuleI
             try {uri=NetworkPolicy.Validate(url,true);}
             catch(ArgumentException)
             {
-                Store.Exec(c,null,"UPDATE ir3.AgentState SET State='warning',LastError='Webhook destination is not allowed by agent network policy.' WHERE Id=1;");
-                return;
+                throw new ArgumentException("Webhook host/port is not allowed in Web.config.");
             }
-            foreach(var row in Store.Rows(c,null,"SELECT TOP(10) * FROM ir3.NotificationOutbox WHERE State='pending' AND NextAttemptUtc<=SYSUTCDATETIME() ORDER BY CreatedUtc"))
+            Store.Exec(c,null,"UPDATE ir3.NotificationOutbox SET State='pending' WHERE State='sending';");
+            foreach(var row in Store.Rows(c,null,"SELECT TOP(1) * FROM ir3.NotificationOutbox WHERE State='pending' AND NextAttemptUtc<=SYSUTCDATETIME() ORDER BY CreatedUtc"))
             {
                 Beat();Guid id=(Guid)row["Id"];int attempts=Store.Num(row["Attempts"])+1;int? status=null;string error=null;
                 Store.Exec(c,null,"UPDATE ir3.NotificationOutbox SET State='sending',Attempts=@n WHERE Id=@id","@n",attempts,"@id",id);

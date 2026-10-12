@@ -1,12 +1,24 @@
 {
-  "suite": "Chromium + mocked API, no IIS/SQL execution",
-  "tests": [
+  "scope": "Chromium with mocked API, NOT live IIS/SQL",
+  "checks": [
     {
-      "test": "startup renders overview with stored site",
+      "test": "startup imports via POST",
       "status": "PASS"
     },
     {
-      "test": "daily share uses total, not maximum",
+      "test": "no CSRF token request",
+      "status": "PASS"
+    },
+    {
+      "test": "saved site filter restored",
+      "status": "PASS"
+    },
+    {
+      "test": "daily percentages use total",
+      "status": "PASS"
+    },
+    {
+      "test": "no Windows auth tab",
       "status": "PASS"
     },
     {
@@ -78,106 +90,92 @@
       "status": "PASS"
     },
     {
-      "test": "tab access",
+      "test": "all tabs without JS errors",
       "status": "PASS"
     },
     {
-      "test": "all tabs without JavaScript errors",
+      "test": "rendered error panel hidden",
       "status": "PASS"
     },
     {
-      "test": "check name HTML escaped",
+      "test": "source checkboxes present",
       "status": "PASS"
     },
     {
-      "test": "check editor sends typed JSON and CSRF",
+      "test": "source names escaped",
       "status": "PASS"
     },
     {
-      "test": "all-sites rule opens as site 0",
+      "test": "not saved until explicit click",
       "status": "PASS"
     },
     {
-      "test": "rule editor preserves revision",
+      "test": "unsaved changes retained",
       "status": "PASS"
     },
     {
-      "test": "expired CSRF retried exactly once",
+      "test": "explicit false sent with custom header",
       "status": "PASS"
     },
     {
-      "test": "origin denial not retried",
+      "test": "pause stored",
       "status": "PASS"
     },
     {
-      "test": "raw line dialog is text only",
+      "test": "resume stored",
       "status": "PASS"
     },
     {
-      "test": "monitoring checkboxes for every source including no-log site",
+      "test": "bulk action only visible",
       "status": "PASS"
     },
     {
-      "test": "source names are HTML escaped",
+      "test": "hidden sources unchanged",
       "status": "PASS"
     },
     {
-      "test": "checkbox edits are not sent before Save",
+      "test": "revision conflict retains true server state",
       "status": "PASS"
     },
     {
-      "test": "refresh preserves unsaved source choice",
+      "test": "no Replay action without worker",
       "status": "PASS"
     },
     {
-      "test": "source save sends explicit false revision and CSRF",
+      "test": "raw event displayed as text",
       "status": "PASS"
     },
     {
-      "test": "source pause survives server reload",
+      "test": "check name escaped",
       "status": "PASS"
     },
     {
-      "test": "saved state has no pending changes",
+      "test": "check editor sends typed values",
       "status": "PASS"
     },
     {
-      "test": "paused source cannot request replay from UI",
+      "test": "manual monitoring is explicit POST",
       "status": "PASS"
     },
     {
-      "test": "bulk selection applies only to visible rows",
+      "test": "all-site rule displays zero",
       "status": "PASS"
     },
     {
-      "test": "bulk save does not change hidden sources",
+      "test": "rule editor uses POST",
       "status": "PASS"
     },
     {
-      "test": "revision conflict reloads server state without false success",
+      "test": "auto-import can be disabled",
       "status": "PASS"
     },
     {
-      "test": "source save failure preserves draft for retry",
+      "test": "no executed injected HTML",
       "status": "PASS"
     },
     {
-      "test": "re-enable persists monitoring and restores replay action",
-      "status": "PASS"
-    },
-    {
-      "test": "reader cannot see write controls",
-      "status": "PASS"
-    },
-    {
-      "test": "role denied shown separately from CSRF",
-      "status": "PASS"
-    },
-    {
-      "test": "no unhandled browser errors",
+      "test": "all tests without browser runtime errors",
       "status": "PASS"
     }
-  ],
-  "passed": 44,
-  "browserErrors": []
+  ]
 }

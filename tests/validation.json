@@ -1,0 +1,294 @@
+{
+  "version": "3.2.0-simple",
+  "scope": "Static consistency, JavaScript syntax, XML and documentation links only; not a C#/PowerShell compiler or SQL execution",
+  "checks": [
+    {
+      "name": "required file: Setup.ps1",
+      "passed": true
+    },
+    {
+      "name": "required file: Stop-Legacy.ps1",
+      "passed": true
+    },
+    {
+      "name": "required file: README.md",
+      "passed": true
+    },
+    {
+      "name": "required file: web/Web.config",
+      "passed": true
+    },
+    {
+      "name": "required file: web/Reports.ashx",
+      "passed": true
+    },
+    {
+      "name": "required file: web/index.html",
+      "passed": true
+    },
+    {
+      "name": "required file: web/v3.js",
+      "passed": true
+    },
+    {
+      "name": "required file: web/App_Code/SimpleRuntime.cs",
+      "passed": true
+    },
+    {
+      "name": "required file: sql/001-v3-schema.sql",
+      "passed": true
+    },
+    {
+      "name": "required file: sql/005-auto-sources.sql",
+      "passed": true
+    },
+    {
+      "name": "unique HTML ids",
+      "passed": true
+    },
+    {
+      "name": "JavaScript syntax: script 11",
+      "passed": true
+    },
+    {
+      "name": "JavaScript syntax: script 12",
+      "passed": true
+    },
+    {
+      "name": "static JavaScript ids exist in HTML",
+      "passed": true
+    },
+    {
+      "name": "no CSRF token acquisition in client",
+      "passed": true
+    },
+    {
+      "name": "custom request header on POST",
+      "passed": true
+    },
+    {
+      "name": "auto-import checks page visibility",
+      "passed": true
+    },
+    {
+      "name": "no overlapping imports in browser",
+      "passed": true
+    },
+    {
+      "name": "checkbox save API used",
+      "passed": true
+    },
+    {
+      "name": "manual network monitoring button used",
+      "passed": true
+    },
+    {
+      "name": "single connection string setting",
+      "passed": true
+    },
+    {
+      "name": "log roots configured",
+      "passed": true
+    },
+    {
+      "name": "no mandatory PublicOrigin or editor setting",
+      "passed": true
+    },
+    {
+      "name": "Web.config default index.html",
+      "passed": true
+    },
+    {
+      "name": "no Windows-auth requirement in application",
+      "passed": true
+    },
+    {
+      "name": "no package EXE needed or bundled",
+      "passed": true
+    },
+    {
+      "name": "import performed synchronously in refresh",
+      "passed": true
+    },
+    {
+      "name": "direct directory discovery",
+      "passed": true
+    },
+    {
+      "name": "no inventory timestamps or snapshots in runtime",
+      "passed": true
+    },
+    {
+      "name": "single importer SQL lock retained",
+      "passed": true
+    },
+    {
+      "name": "lock connection is not pooled",
+      "passed": true
+    },
+    {
+      "name": "discovery does not overwrite Enabled on existing source",
+      "passed": true
+    },
+    {
+      "name": "source pause is rechecked at batch commit",
+      "passed": true
+    },
+    {
+      "name": "atomic batch checkpoint",
+      "passed": true
+    },
+    {
+      "name": "datetime2 parameters retain precision",
+      "passed": true
+    },
+    {
+      "name": "same-size timestamp changes can trigger reread",
+      "passed": true
+    },
+    {
+      "name": "reappeared file can resume",
+      "passed": true
+    },
+    {
+      "name": "truncated files preserve history",
+      "passed": true
+    },
+    {
+      "name": "source choices are versioned",
+      "passed": true
+    },
+    {
+      "name": "minimal write-method validation",
+      "passed": true
+    },
+    {
+      "name": "minimal write-header validation",
+      "passed": true
+    },
+    {
+      "name": "normal refresh does not perform network monitoring",
+      "passed": true
+    },
+    {
+      "name": "no mandatory agent heartbeat",
+      "passed": true
+    },
+    {
+      "name": "no binary/compiler/service required in setup",
+      "passed": true
+    },
+    {
+      "name": "setup creates application directory",
+      "passed": true
+    },
+    {
+      "name": "setup writes Web.config directly",
+      "passed": true
+    },
+    {
+      "name": "setup uses canonical SQL keys",
+      "passed": true
+    },
+    {
+      "name": "setup repeats without resetting configured authentication",
+      "passed": true
+    },
+    {
+      "name": "setup default listener is loopback",
+      "passed": true
+    },
+    {
+      "name": "setup creates only dedicated pool SQL permissions",
+      "passed": true
+    },
+    {
+      "name": "no service code in web",
+      "passed": true
+    },
+    {
+      "name": "SQL can be submitted without GO splitter",
+      "passed": true
+    },
+    {
+      "name": "no destructive schema reset",
+      "passed": true
+    },
+    {
+      "name": "compatible current requests view retained",
+      "passed": true
+    },
+    {
+      "name": "schema 310 extension supplied",
+      "passed": true
+    },
+    {
+      "name": "Markdown link: README.md -> docs/INSTALL.md",
+      "passed": true
+    },
+    {
+      "name": "Markdown link: README.md -> docs/UPGRADE.md",
+      "passed": true
+    },
+    {
+      "name": "Markdown link: README.md -> docs/CONFIGURATION.md",
+      "passed": true
+    },
+    {
+      "name": "Markdown link: README.md -> docs/REMOTE-SQL.md",
+      "passed": true
+    },
+    {
+      "name": "Markdown link: README.md -> docs/TESTING.md",
+      "passed": true
+    },
+    {
+      "name": "Markdown link: README.md -> docs/TESTING.md",
+      "passed": true
+    },
+    {
+      "name": "Markdown link: docs/UPGRADE.md -> ../README.md",
+      "passed": true
+    },
+    {
+      "name": "Markdown link: docs/INSTALL.md -> ../README.md",
+      "passed": true
+    },
+    {
+      "name": "Markdown link: docs/INSTALL.md -> UPGRADE.md",
+      "passed": true
+    },
+    {
+      "name": "Markdown link: docs/CONFIGURATION.md -> ../README.md",
+      "passed": true
+    },
+    {
+      "name": "Markdown link: docs/TESTING.md -> ../README.md",
+      "passed": true
+    },
+    {
+      "name": "Markdown link: docs/REFERENCES.md -> ../README.md",
+      "passed": true
+    },
+    {
+      "name": "Markdown link: docs/REMOTE-SQL.md -> ../README.md",
+      "passed": true
+    },
+    {
+      "name": "browser test result available",
+      "passed": true
+    }
+  ],
+  "passed": 69,
+  "browser": {
+    "checks": 44,
+    "mode": "Chromium; mocked HTTP/SQL responses"
+  },
+  "not_executed": [
+    "Windows PowerShell 5.1",
+    "C# compilation under .NET Framework",
+    "IIS setup and NTFS ACL",
+    "SQL Server integration",
+    "Live HTTP import and authentication"
+  ]
+}

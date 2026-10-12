@@ -1,4 +1,4 @@
-﻿// IIS Reports v3.0. Shared by the ASP.NET Web Site and the Windows agent.
+﻿// IIS Reports Simple: shared SQL and W3C parser for the ASP.NET Web Site.
 // Language: C# 5. Runtime: .NET Framework 4.8. No NuGet packages.
 using System;
 using System.Collections.Generic;
@@ -85,12 +85,12 @@ namespace IISReports.V3
         public static void CheckSchema(SqlConnection c)
         {
             object version = Scalar(c, null, "IF OBJECT_ID('ir3.SchemaVersions','U') IS NOT NULL SELECT MAX(Version) FROM ir3.SchemaVersions;");
-            if (Long(version) != 310) throw new InvalidOperationException("Run tools/Initialize-Database.ps1, including sql/005-auto-sources.sql (expected schema 310).");
+            if (Long(version) != 310) throw new InvalidOperationException("Database is not prepared. Run Setup.ps1 once (schema 310).");
         }
         public static DateTime? LastImport()
         {
             using (var c = Open())
-            { object v = Scalar(c, null, "SELECT LastSuccessfulScanUtc FROM ir3.AgentState WHERE Id=1"); return v == null ? (DateTime?)null : DateTime.SpecifyKind((DateTime)v, DateTimeKind.Utc); }
+            { object v = Scalar(c, null, "SELECT MAX(LastImportUtc) FROM ir3.Generations"); return v == null ? (DateTime?)null : DateTime.SpecifyKind((DateTime)v, DateTimeKind.Utc); }
         }
         public static void Audit(SqlConnection c, SqlTransaction tx, string actor, string action, string target, string detail)
         { Exec(c, tx, "INSERT ir3.AuditEvents(Actor,Action,Target,Detail) VALUES(@a,@k,@t,@d)", "@a", Settings.Clip(actor,256), "@k", action, "@t", Settings.Clip(target,160), "@d", Settings.Clip(detail,2048)); }
@@ -139,7 +139,7 @@ namespace IISReports.V3
     public static class W3C
     {
         public const int ParserVersion = 300;
-        public const int BatchBytes = 8 * 1024 * 1024;
+        public const int BatchBytes = 2 * 1024 * 1024;
         public const int MaxLineBytes = 1024 * 1024;
         private static readonly Encoding StrictUtf8 = new UTF8Encoding(false, true);
         public static ReadBatch Read(FileStream file, long position, long lineNumber, string fields, long snapshotLength)

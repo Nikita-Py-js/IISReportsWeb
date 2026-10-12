@@ -14,7 +14,7 @@ namespace IISReports.V3
         private readonly Action heartbeat;
         public ImportEngine(SqlConnection connection, Action beat) { c=connection; heartbeat=beat; }
         private void Beat() { if(heartbeat!=null)heartbeat(); }
-        private static IEnumerable<string> Enumerate(string root)
+        public static IEnumerable<string> Enumerate(string root)
         {
             var pending=new Stack<string>();pending.Push(Path.GetFullPath(root));
             while(pending.Count>0)
@@ -38,60 +38,7 @@ namespace IISReports.V3
                 if(string.Equals(d.FullName.TrimEnd(Path.DirectorySeparatorChar)+Path.DirectorySeparatorChar,basePath,StringComparison.OrdinalIgnoreCase))break;
             }
         }
-        public bool Scan() { return Scan(null); }
-        public bool Scan(int? onlySourceId)
-        {
-            bool ok=true; Guid run=Guid.NewGuid(); DateTime started=DateTime.UtcNow; long rows=0;
-            Store.Exec(c,null,"INSERT ir3.ImportRuns(Id,StartedUtc,Kind,Status) VALUES(@id,@t,'scan','running')","@id",run,"@t",started);
-            try
-            {
-                foreach(var source in Store.Rows(c,null,"SELECT * FROM ir3.Sources WHERE Enabled=1 AND (AutoDiscovered=0 OR Available=1) AND (@id IS NULL OR Id=@id) ORDER BY Id","@id",onlySourceId.HasValue?(object)onlySourceId.Value:null))
-                {
-                    int sourceId=Store.Num(source["Id"]);string root=Store.Str(source["RootPath"]);int errors=0;bool paused=false;
-                    try
-                    {
-                        foreach(string path in Enumerate(root).OrderBy(p=>p,StringComparer.OrdinalIgnoreCase))
-                        {
-                            Beat(); if(!SourceSelection.CanImport(c,null,sourceId,false)){paused=true;break;}
-                            long fileId=Register(sourceId,path);
-                            try
-                            {
-                                string state=Store.Str(Store.Scalar(c,null,"SELECT Status FROM ir3.Files WHERE Id=@id","@id",fileId));
-                                if(state=="changed") { errors++;continue; }
-                                rows+=ImportFile(fileId,false,0);
-                            }
-                            catch(SourcePausedException){paused=true;break;}
-                            catch(OperationCanceledException){throw;}
-                            catch(Exception ex)
-                            {
-                                ok=false;errors++;
-                                Store.Exec(c,null,"UPDATE ir3.Files SET Status=@s,LastError=@e WHERE Id=@id",
-                                    "@s",ex is InvalidDataException?"changed":"error","@e",Settings.Clip(ex.Message,1024),"@id",fileId);
-                            }
-                        }
-                        if(paused)continue; // Do not mark unvisited files as missing when an operator paused a source.
-                        Store.Exec(c,null,"UPDATE ir3.Files SET Status='missing',LastError='Source file is missing; history retained.' WHERE SourceId=@s AND (LastSeenUtc IS NULL OR LastSeenUtc<@t)","@s",sourceId,"@t",started);
-                        if(Store.Long(Store.Scalar(c,null,"SELECT COUNT(*) FROM ir3.Files WHERE SourceId=@s AND Status='missing'","@s",sourceId))>0)errors++;
-                        if(errors>0)ok=false;
-                        Store.Exec(c,null,"UPDATE ir3.Sources SET LastScanUtc=@t,LastError=@e WHERE Id=@s","@t",DateTime.UtcNow,"@e",errors==0?null:errors+" files require attention.","@s",sourceId);
-                    }
-                    catch(OperationCanceledException){throw;}
-                    catch(Exception ex)
-                    {
-                        ok=false;Store.Exec(c,null,"UPDATE ir3.Sources SET LastScanUtc=@t,LastError=@e WHERE Id=@s","@t",DateTime.UtcNow,"@e",Settings.Clip(ex.Message,1024),"@s",sourceId);
-                    }
-                }
-                Store.Exec(c,null,"UPDATE ir3.ImportRuns SET FinishedUtc=@t,Status=@s,RowsProcessed=@n,Detail=@d WHERE Id=@id",
-                    "@t",DateTime.UtcNow,"@s",ok?"ok":"warning","@n",rows,"@d",ok?"Scan complete. Counts are parsed rows processed, not necessarily newly inserted rows.":"Some files or sources require attention. See Sources.","@id",run);
-                return ok;
-            }
-            catch(Exception ex)
-            {
-                try { Store.Exec(c,null,"UPDATE ir3.ImportRuns SET FinishedUtc=@t,Status='failed',Detail=@d WHERE Id=@id","@t",DateTime.UtcNow,"@d",Settings.Clip(ex.Message,2048),"@id",run); } catch { }
-                throw;
-            }
-        }
-        private long Register(int sourceId,string path)
+        public long Register(int sourceId,string path)
         {
             if(path.Length>1024)throw new IOException("Source path exceeds 1024 characters.");
             byte[] key=Hashing.Text(path.ToUpperInvariant());var info=new FileInfo(path);
@@ -105,7 +52,7 @@ namespace IISReports.V3
                     CreateGeneration(id,"initial import",tx);
                 }
                 else id=Store.Long(found);
-                Store.Exec(c,tx,"UPDATE ir3.Files SET ObservedSize=@n,ObservedMtime=@m,LastSeenUtc=@t WHERE Id=@id","@n",info.Length,"@m",info.LastWriteTimeUtc,"@t",DateTime.UtcNow,"@id",id);
+                Store.Exec(c,tx,"UPDATE ir3.Files SET Status=CASE WHEN Status='changed' THEN Status WHEN Status='missing' OR ObservedSize<>@n OR ObservedMtime<>@m THEN 'pending' ELSE Status END,ObservedSize=@n,ObservedMtime=@m,LastSeenUtc=@t WHERE Id=@id","@n",info.Length,"@m",info.LastWriteTimeUtc,"@t",DateTime.UtcNow,"@id",id);
                 tx.Commit();return id;
             }
         }

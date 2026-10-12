@@ -27,7 +27,7 @@ def run(binary):
                 identity={'mode':'windows','identity':'TEST\\Operator','isAuthenticated':True,'authenticationType':'Negotiate','canRead':state['read'],'canEdit':state['editor'],'denialCode':None if state['read'] else 'reader_role_required','processIdentity':'IIS APPPOOL\\IISReports','version':'3.1.1'}
                 lists={'clients','users','targets','methods','user-agents','referers','slow-requests','slow-urls','errors-5xx-by-url','check-results','incident-events','audit','parse-errors'}
                 if handler.request.method=='POST':
-                    state['posts'].append((action,json.loads(handler.request.post_data or '{}'),handler.request.headers.get('x-iisreports-csrf')))
+                    state['posts'].append((action,json.loads(handler.request.post_data or '{}'),handler.request.headers.get('x-iisreports-request')))
                     if state['expire']:
                         state['expire']=False;code=403;data={'error':'Expired token','code':'csrf_expired'}
                     elif state['deny']:
@@ -40,7 +40,7 @@ def run(binary):
                             for change in changes:
                                 row=next(r for r in state['sources'] if r['Id']==change['id']);row['Enabled']=change['enabled'];row['Revision']+=1
                             data={'ok':True,'changed':len(changes)}
-                    else:code=202 if action in ('refresh','job-create') else 200;data={'ok':True,'id':UUID}
+                    else:code=200;data={'ok':True,'id':UUID,'rowsProcessed':7,'filesProcessed':2,'pendingFiles':1,'errors':[]}
                 elif action=='whoami':data=identity
                 elif action=='csrf':state['tokenCalls']+=1;data={'token':'test-token-'+str(state['tokenCalls']),'security':identity}
                 elif action=='sites':data=[{'siteId':1,'name':'Main','requests':1177},{'siteId':2,'name':'Two','requests':1177}]
@@ -55,11 +55,11 @@ def run(binary):
                 elif action=='performance':data={'bucketMinutes':1,'points':[{'ts':NOW,'requests':3,'status4xx':1,'status5xx':0,'avgMs':20,'p95Ms':30,'peakRps':2,'avgRps':.05,'rpm':3}]}
                 elif action=='comparison':data={k:{'from':NOW,'to':NOW,'requests':100,'errors4xx':4,'errors5xx':1,'avgMs':20,'p95Ms':40} for k in ('previous','current')}
                 elif action=='bots':data={'asnRanges':0,'rows':[]}
-                elif action=='sources':data={'files':[{'fileId':1,'sourceId':1,'path':'C:\\logs\\test.log','generation':1,'generationId':1,'status':'ok','size':99,'position':99,'dbRows':3,'parseErrors':0,'verification':'ok','verifiedUtc':NOW,'error':None}], 'sources':state['sources'],'discovery':[{'State':'ok','SitesFound':3,'SnapshotUtc':NOW}],'total':1,'shown':1,'integrityScope':'All chunks checked by Verify'}
+                elif action=='sources':data={'files':[{'fileId':1,'sourceId':1,'path':'C:\\logs\\test.log','generation':1,'generationId':1,'status':'ok','size':99,'position':99,'dbRows':3,'parseErrors':0,'verification':'ok','verifiedUtc':NOW,'error':None}], 'sources':state['sources'],'discovery':{'mode':'directories','roots':['C:\\logs'],'errors':[]},'total':1,'shown':1,'integrityScope':'All chunks checked by Verify'}
                 elif action=='generations':data=[{'Id':1,'Number':1,'IsActive':True}]
                 elif action=='checks':data=[{'Id':UUID,'Name':XSS,'Url':'https://allowed.test/health','Enabled':True,'Revision':1,'ExpectedStatus':200,'IntervalSeconds':60,'TimeoutSeconds':10,'MaxLatencyMs':5000,'FailAfter':3,'RecoverAfter':2,'LastSuccess':True,'LastCheckUtc':NOW,'LastMessage':'ok'}]
                 elif action=='rules':data=[{'Id':UUID,'Name':'rule','Metric':'5xx_percent','Threshold':5,'Enabled':True,'SiteId':None,'WindowMinutes':5,'MinSamples':100,'FailAfter':2,'RecoverAfter':2,'Revision':1,'LastValue':0,'LastSamples':100,'LastMessage':'ok'}]
-                elif action=='agent':data=[{'State':'running','HeartbeatUtc':NOW}]
+                elif action=='runtime':data={'mode':'web-request','totalEntries':1177,'lastParsed':NOW,'lastRefresh':[]}
                 elif action=='incidents':data=[{'Id':UUID,'Title':'Test','State':'open','Active':True,'OpenedUtc':NOW,'Detail':XSS}]
                 elif action=='jobs':data=[{'Id':UUID,'Kind':'scan','State':'done','RequestedBy':'TEST\\Operator','RequestedUtc':NOW,'ProgressOffset':99,'Result':'ok'}]
                 elif action=='notifications':data=[{'Id':UUID,'Kind':'opened','State':'failed','Attempts':8,'HttpStatus':500,'LastError':'test'}]
@@ -94,78 +94,76 @@ def run(binary):
             html=html.replace('<script src="v3.js"></script>','<script>'+(ROOT/'web/v3.js').read_text()+'</script>')
             html=html.replace('<link rel="stylesheet" href="v3.css">','<style>'+(ROOT/'web/v3.css').read_text()+'</style>')
             page.set_content(html)
+
         page.close();load_page();page.wait_for_function("document.querySelector('#kpis').textContent.includes('1177')")
         def ok(name,condition=True):
             assert condition,name
             results.append({'test':name,'status':'PASS'})
-        ok('startup renders overview with stored site',page.locator('#site-select').input_value()=='2')
-        ok('daily share uses total, not maximum','57.4%' in page.locator('#daily-body').inner_text())
+        page.wait_for_function("!refreshing")
+        ok('startup imports via POST',any(x[0]=='refresh' and x[2]=='1' for x in state['posts']))
+        ok('no CSRF token request',state['tokenCalls']==0)
+        ok('saved site filter restored',page.locator('#site-select').input_value()=='2')
+        ok('daily percentages use total','57.4%' in page.locator('#daily-body').inner_text())
+        ok('no Windows auth tab',page.locator('#tabs [data-tab="access"]').count()==0)
         tabs=page.locator('#tabs button').evaluate_all('(els)=>els.map(e=>e.dataset.tab)')
         for tab in tabs:
-            page.click(f'#tabs button[data-tab="{tab}"]');page.wait_for_timeout(40)
+            page.click(f'#tabs button[data-tab="{tab}"]');page.wait_for_timeout(80)
             ok('tab '+tab,page.locator('#tab-'+tab).is_visible())
-        ok('all tabs without JavaScript errors',not errors)
-        page.click('#tabs button[data-tab="checks"]');page.wait_for_timeout(60)
-        ok('check name HTML escaped',page.locator('#checks-table img').count()==0 and page.evaluate('window.pwned===undefined'))
-        page.click('[data-v3-action="new-check"]');page.locator('#check-form [data-key="name"]').fill('Synthetic check');page.locator('#check-form [data-key="url"]').fill('https://allowed.test/health')
-        page.locator('#check-form [type="submit"]').click();page.wait_for_timeout(80)
-        ok('check editor sends typed JSON and CSRF',state['posts'][-1][0]=='check-save' and state['posts'][-1][1]['expectedStatus']==200 and bool(state['posts'][-1][2]))
-        page.click('#tabs button[data-tab="alerts"]');page.wait_for_timeout(60);page.click('[data-v3-action="edit-rule"]')
-        ok('all-sites rule opens as site 0',page.locator('#rule-form [data-key="siteId"]').input_value()=='0')
-        page.locator('#rule-form [type="submit"]').click();page.wait_for_timeout(60)
-        ok('rule editor preserves revision',state['posts'][-1][0]=='rule-save' and state['posts'][-1][1]['revision']==1)
-        state['expire']=True;before=len(state['posts']);tokens=state['tokenCalls']
-        page.evaluate("api('refresh',null,{method:'POST',noSite:true})")
-        ok('expired CSRF retried exactly once',len(state['posts'])==before+2 and state['tokenCalls']==tokens+1)
-        state['deny']='csrf_origin';before=len(state['posts']);tokens=state['tokenCalls']
-        error=page.evaluate("api('refresh',null,{method:'POST',noSite:true}).then(()=>'',e=>e.code)")
-        ok('origin denial not retried',error=='csrf_origin' and len(state['posts'])==before+1 and state['tokenCalls']==tokens)
-        state['deny']=None
-        page.evaluate("detail('Raw event', '<img src=x onerror=window.pwned=1>')")
-        ok('raw line dialog is text only',page.locator('#detail-body img').count()==0)
-        page.locator('#v3-dialog').evaluate('(e)=>e.close()')
-        page.click('#tabs button[data-tab="sources"]');page.wait_for_timeout(100)
-        ok('monitoring checkboxes for every source including no-log site',page.locator('#source-roots [data-source-id]').count()==3)
-        ok('source names are HTML escaped',page.locator('#source-roots img').count()==0 and page.evaluate('window.pwned===undefined'))
+        ok('all tabs without JS errors',not errors)
+        ok('rendered error panel hidden',not page.locator('#api-error').is_visible())
+        page.click('#tabs [data-tab="sources"]');page.wait_for_timeout(100)
+        ok('source checkboxes present',page.locator('[data-source-id]').count()==3)
+        ok('source names escaped',page.locator('#source-roots img').count()==0)
         page.locator('[data-source-id="1"]').uncheck()
-        ok('checkbox edits are not sent before Save',state['sources'][0]['Enabled'] is True and not page.locator('#sources-save').is_disabled())
+        ok('not saved until explicit click',state['sources'][0]['Enabled'] is True)
         page.evaluate('loadSources()')
-        ok('refresh preserves unsaved source choice',not page.locator('[data-source-id="1"]').is_checked())
+        ok('unsaved changes retained',not page.locator('[data-source-id="1"]').is_checked())
         page.click('#sources-save');page.wait_for_timeout(120)
-        ok('source save sends explicit false revision and CSRF',state['posts'][-1][0]=='sources-save' and state['posts'][-1][1]['changes']==[{'id':1,'enabled':False,'revision':1}] and bool(state['posts'][-1][2]))
-        ok('source pause survives server reload',state['sources'][0]['Enabled'] is False and not page.locator('[data-source-id="1"]').is_checked())
-        ok('saved state has no pending changes',page.locator('#sources-save').is_disabled())
-        ok('paused source cannot request replay from UI',page.locator('#sources-body [data-v3-action="replay"]').count()==0)
+        ok('explicit false sent with custom header',state['posts'][-1][0]=='sources-save' and state['posts'][-1][1]['changes'][0]['enabled'] is False and state['posts'][-1][2]=='1')
+        ok('pause stored',not state['sources'][0]['Enabled'])
+        page.locator('[data-source-id="1"]').check();page.click('#sources-save');page.wait_for_timeout(100)
+        ok('resume stored',state['sources'][0]['Enabled'])
         page.locator('#source-search').fill('FutureSite')
         page.click('#sources-disable-visible')
-        ok('bulk selection applies only to visible rows',page.evaluate('[...sourceSettings.draft.keys()]')==[3])
+        ok('bulk action only visible',page.evaluate('[...sourceSettings.draft.keys()]')==[3])
         page.click('#sources-save');page.wait_for_timeout(100)
-        ok('bulk save does not change hidden sources',state['sources'][1]['Enabled'] is True and state['sources'][2]['Enabled'] is False)
+        ok('hidden sources unchanged',state['sources'][1]['Enabled'] is True)
         page.locator('#source-search').fill('')
-        page.locator('[data-source-id="1"]').check();state['sourceConflict']=True
-        page.click('#sources-save');page.wait_for_timeout(150)
-        ok('revision conflict reloads server state without false success',state['sources'][0]['Enabled'] is False and not page.locator('[data-source-id="1"]').is_checked())
-        page.locator('[data-source-id="1"]').check();state['deny']='editor_role_required'
+        page.locator('[data-source-id="1"]').uncheck();state['sourceConflict']=True
         page.click('#sources-save');page.wait_for_timeout(120)
-        ok('source save failure preserves draft for retry',state['sources'][0]['Enabled'] is False and page.evaluate('sourceSettings.draft.has(1)'))
-        state['deny']=None;page.click('#sources-save');page.wait_for_timeout(120)
-        ok('re-enable persists monitoring and restores replay action',state['sources'][0]['Enabled'] and page.locator('#sources-body [data-v3-action="replay"]').count()==1)
+        ok('revision conflict retains true server state',state['sources'][0]['Enabled'] is True)
+        page.evaluate('clearError()')
+        ok('no Replay action without worker',page.locator('[data-v3-action="replay"]').count()==0)
+        page.evaluate("detail('Raw', '<img src=x onerror=window.pwned=1>')")
+        ok('raw event displayed as text',page.locator('#detail-body img').count()==0)
+        page.locator('#v3-dialog').evaluate('(e)=>e.close()')
+        page.click('#tabs [data-tab="checks"]');page.wait_for_timeout(80)
+        ok('check name escaped',page.locator('#checks-table img').count()==0)
+        page.click('[data-v3-action="new-check"]')
+        page.locator('#check-form [data-key="name"]').fill('Manual check')
+        page.locator('#check-form [data-key="url"]').fill('https://allowed.test/')
+        page.locator('#check-form [type="submit"]').click();page.wait_for_timeout(100)
+        ok('check editor sends typed values',state['posts'][-1][0]=='check-save' and state['posts'][-1][1]['expectedStatus']==200)
+        page.click('#tab-checks [data-v3-action="run-monitoring"]');page.wait_for_timeout(100)
+        ok('manual monitoring is explicit POST',state['posts'][-1][0]=='monitor')
+        page.click('#tabs [data-tab="alerts"]');page.wait_for_timeout(80)
+        page.click('[data-v3-action="edit-rule"]')
+        ok('all-site rule displays zero',page.locator('#rule-form [data-key="siteId"]').input_value()=='0')
+        page.locator('#rule-form [type="submit"]').click();page.wait_for_timeout(80)
+        ok('rule editor uses POST',state['posts'][-1][0]=='rule-save')
+        page.locator('#auto-refresh').uncheck()
+        ok('auto-import can be disabled',not page.locator('#auto-refresh').is_checked())
+        page.click('#tabs [data-tab="sources"]');page.wait_for_timeout(100)
         state['sources'][1]['Name']='API website'
-        state['sources'][1]['Enabled']=False
-        state['sources'][2]['Enabled']=True
-        page.evaluate("clearError(); document.querySelector('#site-select').value='0'; sourceSettings.draft.clear();")
-        page.evaluate("loadSources()")
-        page.wait_for_timeout(2200)
-        page.screenshot(path=str(ROOT/'tests/sources-preview.png'),full_page=True)
-        state['editor']=False;page.close();load_page();page.wait_for_function("accessInfo.canRead && !accessInfo.canEdit");page.wait_for_timeout(100)
-        ok('reader cannot see write controls',page.locator('[data-v3-action="new-check"]').is_hidden() and page.locator('#tabs [data-tab="queue"]').is_hidden())
-        state['read']=False;page.close();load_page();page.wait_for_function("document.querySelector('#tab-access').hidden===false")
-        ok('role denied shown separately from CSRF','reader_role_required' in page.locator('#access-info').inner_text())
-        ok('no unhandled browser errors',not errors)
+        page.evaluate("clearError(); sourceSettings.draft.clear()")
+        page.evaluate('loadSources()');page.wait_for_timeout(2200)
+        page.screenshot(path=str(ROOT/'tests/sources.png'),full_page=True)
+        ok('no executed injected HTML',page.evaluate('window.pwned===undefined'))
+        ok('all tests without browser runtime errors',not errors)
         browser.close()
-    report={'suite':'Chromium + mocked API, no IIS/SQL execution','tests':results,'passed':len(results),'browserErrors':errors}
-    out=ROOT/'tests/browser-results.json';out.write_text(json.dumps(report,ensure_ascii=False,indent=2))
-    print(json.dumps(report,indent=2))
+    (ROOT/'tests/browser-results.json').write_text(json.dumps({'scope':'Chromium with mocked API, NOT live IIS/SQL','checks':results},ensure_ascii=False,indent=2))
+    print('PASS',len(results),'browser tests')
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--chromium',default='/usr/bin/chromium');run(parser.parse_args().chromium)
+    ap=argparse.ArgumentParser();ap.add_argument('--chromium',default='/usr/bin/chromium')
+    run(ap.parse_args().chromium)

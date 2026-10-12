@@ -25,36 +25,30 @@ namespace IISReports
     }
     public static class V3Api
     {
-        private static readonly HashSet<string> Writes=new HashSet<string>(new[]{"csrf-check","refresh","job-create","check-save","rule-save","incident-action","notification-test","notification-retry","sources-save"},StringComparer.Ordinal);
+        private static readonly HashSet<string> Writes=new HashSet<string>(new[]{"refresh","monitor","file-verify","check-save","rule-save","incident-action","notification-test","notification-retry","sources-save"},StringComparer.Ordinal);
         public static bool Handles(string action)
         {
-            return Writes.Contains(action)||new[]{"whoami","csrf","health","diag","agent","sources","generations","jobs","checks","check-results","rules","incidents","incident-events","notifications","raw-event","parse-errors","audit"}.Contains(action);
+            return Writes.Contains(action)||new[]{"whoami","health","diag","runtime","sources","generations","jobs","checks","check-results","rules","incidents","incident-events","notifications","raw-event","parse-errors","audit"}.Contains(action);
         }
         public static object Run(HttpContext ctx,string action)
         {
-            if(action=="whoami")
-            {
-                if(!AccessControl.Authenticated(ctx)&&!(AccessControl.Mode=="local"&&AccessControl.Local(ctx)))
-                    ctx.Response.StatusCode=401;
-                return AccessControl.IdentityInfo(ctx);
-            }
-            AccessControl.RequireRead(ctx);
+            if(action=="whoami")return AccessControl.IdentityInfo(ctx);
             if(Writes.Contains(action))AccessControl.RequirePost(ctx);
-            else if(ctx.Request.HttpMethod!="GET")throw new ApiFailure(405,"get_required","Use GET for this endpoint.");
-            if(action=="csrf")return new{token=AccessControl.Token(ctx),security=AccessControl.IdentityInfo(ctx)};
-            if(action=="csrf-check")return new{ok=true,validated=true,mutation=false};
-            if(action=="health")return Health(ctx,false);
-            if(action=="diag"){AccessControl.RequireEditor(ctx);return Health(ctx,true);}
+            else if(ctx.Request.HttpMethod!="GET")throw new ApiFailure(405,"get_required","Use GET for reports.");
+            if(action=="refresh")return SimpleRuntime.Refresh();
+            if(action=="monitor")return SimpleRuntime.RunMonitoring();
+            if(action=="file-verify")return SimpleRuntime.FileAction(LongArg(ctx,"fileId"),"verify");
+            if(action=="health"||action=="diag"||action=="runtime")return SimpleRuntime.Health(ctx,action!="health");
             using(var c=Store.Open())
             {
                 Store.CheckSchema(c);
-                if(action=="agent")return Store.Iso(Store.Rows(c,null,"SELECT * FROM ir3.AgentState"));
+
                 if(action=="incidents")return Store.Iso(Store.Rows(c,null,"SELECT TOP(200) * FROM ir3.Incidents ORDER BY CASE WHEN Active=1 THEN 0 ELSE 1 END,OpenedUtc DESC"));
                 if(action=="incident-events")return Store.Iso(Store.Rows(c,null,"SELECT TOP(500) * FROM ir3.IncidentEvents WHERE IncidentId=@id ORDER BY AtUtc DESC","@id",GuidArg(ctx,"id")));
                 if(action=="checks")return Store.Iso(Store.Rows(c,null,"SELECT * FROM ir3.Checks ORDER BY Name"));
                 if(action=="check-results")return Store.Iso(Store.Rows(c,null,"SELECT TOP(200) * FROM ir3.CheckResults WHERE CheckId=@id ORDER BY StartedUtc DESC","@id",GuidArg(ctx,"id")));
                 if(action=="rules")return Store.Iso(Store.Rows(c,null,@"SELECT r.*,s.LastValue,s.LastSamples,s.LastEvaluatedUtc,s.LastMessage FROM ir3.AlertRules r LEFT JOIN ir3.AlertState s ON s.RuleId=r.Id ORDER BY r.Name"));
-                AccessControl.RequireEditor(ctx); // Operational paths/raw history and every write are operator-only.
+                AccessControl.RequireEditor(ctx); // Simple delegates access control to IIS; kept as a compatibility hook.
                 if(action=="sources")return Sources(c);
                 if(action=="sources-save")
                 {
@@ -71,29 +65,6 @@ namespace IISReports
                 if(action=="audit")return Store.Iso(Store.Rows(c,null,"SELECT TOP(200) * FROM ir3.AuditEvents ORDER BY Id DESC"));
                 if(action=="raw-event")return Store.Iso(Store.Rows(c,null,@"SELECT r.*,f.FullPath,g.Number AS GenerationNumber FROM ir3.RawEvents r JOIN ir3.Generations g ON g.Id=r.GenerationId JOIN ir3.Files f ON f.Id=g.FileId WHERE r.Id=@id","@id",LongArg(ctx,"id")));
                 if(action=="parse-errors")return Store.Iso(Store.Rows(c,null,@"SELECT TOP(200) r.Id,r.GenerationId,r.ByteOffset,r.LineNumber,r.ParseError,r.ImportedUtc,f.FullPath FROM ir3.RawEvents r JOIN ir3.Generations g ON g.Id=r.GenerationId JOIN ir3.Files f ON f.Id=g.FileId WHERE r.ParseError IS NOT NULL ORDER BY r.Id DESC"));
-                if(action=="refresh"||action=="job-create")
-                {
-                    var body=action=="refresh"?new Dictionary<string,object>():Body<Dictionary<string,object>>(ctx);
-                    string kind=action=="refresh"?"scan":Value(body,"kind");long file=0;
-                    if(!new[]{"scan","verify","replay","new-generation"}.Contains(kind))throw new ApiFailure(400,"invalid_job","Unsupported job type.");
-                    if(kind!="scan")
-                    {
-                        if(!long.TryParse(Value(body,"fileId"),out file)||file<1)throw new ApiFailure(400,"file_required","A registered fileId is required.");
-                        if(Store.Long(Store.Scalar(c,null,"SELECT COUNT(*) FROM ir3.Files WHERE Id=@id","@id",file))!=1)throw new ApiFailure(404,"file_not_found","Registered file not found.");
-                        if(kind!="verify")
-                        {
-                            int sourceId=Store.Num(Store.Scalar(c,null,"SELECT SourceId FROM ir3.Files WHERE Id=@id","@id",file));
-                            if(!SourceSelection.CanImport(c,null,sourceId,false))throw new ApiFailure(409,"source_disabled","Enable this available source before replay/new-version jobs.");
-                        }
-                    }
-                    Guid id=Guid.NewGuid();
-                    using(var tx=c.BeginTransaction())
-                    {
-                        Store.Exec(c,tx,"INSERT ir3.Jobs(Id,Kind,FileId,RequestedBy) VALUES(@id,@k,@f,@a)","@id",id,"@k",kind,"@f",file>0?(object)file:null,"@a",AccessControl.Principal(ctx));
-                        Store.Audit(c,tx,AccessControl.Principal(ctx),"job-create",id.ToString(),kind+" fileId="+file);tx.Commit();
-                    }
-                    ctx.Response.StatusCode=202;return new{ok=true,queued=true,jobId=id.ToString("D"),message="Queued. The Windows agent must be running."};
-                }
                 if(action=="check-save")return SaveCheck(c,ctx,Body<CheckEdit>(ctx));
                 if(action=="rule-save")return SaveRule(c,ctx,Body<RuleEdit>(ctx));
                 if(action=="incident-action")
@@ -106,9 +77,9 @@ namespace IISReports
                     Guid id=Guid.NewGuid();using(var tx=c.BeginTransaction())
                     {
                         Incidents.Enqueue(c,tx,id,null,"test","IIS Reports v3 delivery test requested by "+AccessControl.Principal(ctx));
-                        Store.Audit(c,tx,AccessControl.Principal(ctx),"notification-test",id.ToString(),"Queued only; delivery runs in the agent.");tx.Commit();
+                        Store.Audit(c,tx,AccessControl.Principal(ctx),"notification-test",id.ToString(),"Pending; delivery is performed by a manual monitoring pass.");tx.Commit();
                     }
-                    ctx.Response.StatusCode=202;return new{ok=true,eventId=id.ToString(),message="Test queued. Configure the agent webhook to enable delivery."};
+                    ctx.Response.StatusCode=202;return new{ok=true,eventId=id.ToString(),message="Test queued. Configure the Web.config webhook and run a monitoring pass to deliver."};
                 }
                 if(action=="notification-retry")
                 {
@@ -124,38 +95,6 @@ namespace IISReports
             }
             throw new ApiFailure(404,"unknown_action","Unknown v3 action.");
         }
-        public static object Health(HttpContext ctx,bool detail)
-        {
-            try
-            {
-                using(var c=Store.Open())
-                {
-                    Store.CheckSchema(c);var agents=Store.Rows(c,null,"SELECT * FROM ir3.AgentState WHERE Id=1");
-                    long total=Store.Long(Store.Scalar(c,null,"SELECT COUNT_BIG(*) FROM ir3.CurrentRequests"));
-                    double? age=agents.Count==0?(double?)null:(DateTime.UtcNow-DateTime.SpecifyKind((DateTime)agents[0]["HeartbeatUtc"],DateTimeKind.Utc)).TotalSeconds;
-                    bool online=age.HasValue&&age.Value<120&&Store.Str(agents[0]["State"])!="stopped";
-                    long failures=Store.Long(Store.Scalar(c,null,"SELECT COUNT(*) FROM ir3.Sources WHERE Enabled=1 AND (AutoDiscovered=0 OR Available=1) AND LastError IS NOT NULL"));
-                    long queued=Store.Long(Store.Scalar(c,null,"SELECT COUNT(*) FROM ir3.Jobs WHERE State IN('queued','running')"));
-                    var discovery=Store.Rows(c,null,"SELECT * FROM ir3.DiscoveryState WHERE Id=1");
-                    bool discoveryWarning=discovery.Count==0 || Store.Str(discovery[0]["State"])=="error";
-                    bool agentWarning=(agents.Count>0&&Store.Str(agents[0]["State"])=="warning")||discoveryWarning;
-                    string status=!online?"stale":failures>0||agentWarning?"warn":"ok";
-                    // Endpoint is informative JSON; consumers must inspect healthy/status, not HTTP 200 alone.
-                    return new {status=status,healthy=online&&failures==0&&!agentWarning,version="3.1.1",dbConnected=true,schemaInitialized=true,
-                        databaseError=(string)null,totalEntries=total,dbEntries=total,agentOnline=online,heartbeatAgeSeconds=age,
-                        queuedJobs=queued,failedSources=failures,discoveryHealthy=!discoveryWarning,lastParsed=agents.Count==0?null:IsoDate(agents[0]["LastSuccessfulScanUtc"]),
-                        errors=failures==0?new string[0]:new[]{"Some sources require attention. Open Sources."},
-                        agent=detail?Store.Iso(agents):null,identity=detail?AccessControl.IdentityInfo(ctx):null,
-                        storage="ir3.CurrentRequests; legacy dbo tables are retained but not combined",sources=detail?Store.Iso(Store.Rows(c,null,"SELECT * FROM ir3.Sources")):null};
-                }
-            }
-            catch(Exception ex)
-            {
-                ctx.Response.StatusCode=503;
-                return new{status="stale",healthy=false,version="3.1.1",dbConnected=false,schemaInitialized=false,
-                    databaseError=detail?ex.Message:"Database/schema unavailable. An operator can inspect action=diag.",security=AccessControl.IdentityInfo(ctx)};
-            }
-        }
         private static string IsoDate(object v){return v is DateTime?Settings.Utc((DateTime)v):null;}
         private static object Sources(SqlConnection c)
         {
@@ -166,9 +105,12 @@ namespace IISReports
  FROM ir3.Files f JOIN ir3.Sources s ON s.Id=f.SourceId JOIN ir3.Generations g ON g.Id=f.ActiveGenerationId
  OUTER APPLY(SELECT COUNT_BIG(*) AS n,SUM(CASE WHEN ParseError IS NOT NULL THEN CONVERT(bigint,1) ELSE 0 END) AS bad FROM ir3.RawEvents WHERE GenerationId=g.Id)x
  ORDER BY f.Id");
-            return new {files=Store.Iso(rows),sources=Store.Iso(Store.Rows(c,null,"SELECT * FROM ir3.Sources ORDER BY SiteId,Id")),discovery=Store.Iso(Store.Rows(c,null,"SELECT * FROM ir3.DiscoveryState WHERE Id=1")),
+            var sources=Store.Rows(c,null,"SELECT * FROM ir3.Sources ORDER BY SiteId,Id");
+            SiteNames.LoadIfChanged();
+            foreach(var source in sources)source["Name"]=SiteNames.Get(Store.Num(source["SiteId"]));
+            return new {files=Store.Iso(rows),sources=Store.Iso(sources),discovery=new {mode="directories",errors=SimpleRuntime.DiscoveryErrors,roots=SimpleRuntime.LogRoots},
                 total=Store.Long(Store.Scalar(c,null,"SELECT COUNT_BIG(*) FROM ir3.Files")),shown=rows.Count,
-                integrityScope="Each scan checks first/last committed chunks; Verify hashes ALL committed chunks. New uncommitted bytes are not verified against a previous version."};
+                integrityScope="Before an import batch, first/last committed chunks are checked; Verify hashes all committed chunks. Unchanged files are not fully reread."};
         }
         public static T Body<T>(HttpContext ctx) where T:class
         {

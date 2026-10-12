@@ -1,48 +1,25 @@
 /* IIS Reports v3: operations UI. No external scripts, no credentials in storage. */
-let tokenRequest = null;
-const v3Cache = { checks: [], rules: [] };
-
-async function renewToken() {
-  if (!tokenRequest) tokenRequest = api('csrf', null, { noSite:true }).then(data => {
-    csrfToken=data.token; accessInfo=data.security || {}; applyAccess(); return data;
-  }).finally(() => { tokenRequest=null; });
-  return tokenRequest;
-}
-async function api(action, params, opts={}) {
-  const query=Object.assign({ action },params || {});
-  if(!opts.noSite && $('site-select').value!=='0') query.siteId=$('site-select').value;
-  const method=opts.method || 'GET';
-  if(method==='POST' && !csrfToken) await renewToken();
-  const headers=method==='POST' ? {'Content-Type':'application/json; charset=utf-8','X-IISReports-CSRF':csrfToken} : {};
-  const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),120000);
-  let response, data;
+const v3Cache={checks:[],rules:[]};
+async function api(action,params,opts={}) {
+  const query=Object.assign({action},params||{});
+  if(!opts.noSite&&$('site-select').value!=='0')query.siteId=$('site-select').value;
+  const method=opts.method||'GET';
+  const headers=method==='POST'?{'Content-Type':'application/json; charset=utf-8','X-IISReports-Request':'1'}:{};
+  const controller=new AbortController(); const timer=setTimeout(()=>controller.abort(),180000);
   try {
-    response=await fetch('Reports.ashx?'+new URLSearchParams(query),{method,headers,credentials:'same-origin',cache:'no-store',
-      body:method==='POST'?JSON.stringify(opts.body || {}):undefined,signal:controller.signal});
-    const text=await response.text();
-    try { data=JSON.parse(text); }
-    catch (_) { throw new Error(`${action}: HTTP ${response.status}. IIS returned non-JSON. Check Windows Authentication and IIS logs.`); }
-  } finally { clearTimeout(timer); }
-  if(!response.ok || data?.error) {
-    const code=data?.code || '';
-    // Retry only an explicit token rejection, which occurs BEFORE any state mutation.
-    if(method==='POST' && !opts.retried && ['csrf_expired','csrf_invalid','csrf_missing'].includes(code)) {
-      csrfToken=''; await renewToken(); return api(action,params,{...opts,retried:true});
+    const response=await fetch('Reports.ashx?'+new URLSearchParams(query),{
+      method,headers,credentials:'same-origin',cache:'no-store',
+      body:method==='POST'?JSON.stringify(opts.body||{}):undefined,signal:controller.signal});
+    const text=await response.text(); let data;
+    try{data=JSON.parse(text);}catch{throw new Error(`${action}: HTTP ${response.status}. Ответ IIS не является JSON.`);}
+    if(!response.ok||data?.error){
+      const err=new Error(`${action}: HTTP ${response.status} [${data?.code||'error'}]. ${data?.error||'Ошибка сервера'}`);
+      err.code=data?.code;throw err;
     }
-    const error=new Error(`${action}: HTTP ${response.status} [${code||'request_failed'}]. ${data?.error||data?.databaseError||'Access denied'}`);
-    error.code=code;error.details=data;throw error;
-  }
-  return data;
+    return data;
+  }finally{clearTimeout(timer);}
 }
-function applyAccess() {
-  document.querySelectorAll('.operator-only').forEach(el=>{el.style.display=accessInfo.canEdit?'inline-block':'none';});
-  const sourceTab=document.querySelector('#tabs button[data-tab="sources"]');
-  if(sourceTab)sourceTab.hidden=!accessInfo.canEdit;
-  document.querySelectorAll('.toolbar button[onclick="refresh()"]')
-    .forEach(el=>{el.disabled=!accessInfo.canEdit;el.title='Queue a scan in the Windows agent';});
-}
-async function loadAccess(){await renewToken();}
+function applyAccess() {accessInfo={canRead:true,canEdit:true};}
 function v3Button(action,id,label) {
   return `<button class="ghost v3-small" type="button" data-v3-action="${esc(action)}" data-id="${esc(id)}">${esc(label)}</button>`;
 }
@@ -169,11 +146,10 @@ async function loadSources() {
   // Never overwrite unsaved checkbox edits during a periodic refresh.
   if(!sourceSettings.draft.size)sourceSettings.rows=x.sources||[];
   sourcesSnapshot=x.files||[];
-  const d=(x.discovery||[])[0];
-  $('discovery-state').textContent=d
-    ? `Обнаружение: ${d.State==='ok'?'работает':d.State}. Снимок IIS: ${fmt(d.SnapshotUtc)}. Сайтов: ${d.SitesFound??0}. ${d.LastError||''}`
-    : 'Ожидание первого снимка IIS. Проверьте задачу IISReports-DiscoverSites и службу агента.';
-  $('discovery-state').className=!d||d.State==='error'?'v3-problem':'hint';
+  const problems=x.discovery?.errors||[];
+  $('discovery-state').textContent=`Обнаружение каталогов при импорте. Корни: ${(x.discovery?.roots||[]).join('; ')}.`+
+    (problems.length?' '+problems.join('; '):' Снимки IIS и Планировщик не используются.');
+  $('discovery-state').className=problems.length?'v3-problem':'hint';
   renderSourceSettings();
   $('sources-summary').textContent=`Файлов: ${x.total}; показано: ${x.shown}. Проверка целостности не удаляет историю.`;
   $('sources-body').innerHTML=sourcesSnapshot.map(r=>{
@@ -182,7 +158,7 @@ async function loadSources() {
     return `<tr>
     <td class="mono">${esc(r.path)}<br><span class="v3-problem">${esc(r.error)}</span></td><td>${r.generation}</td><td>${esc(r.status)}</td>
     <td>${num(r.position)} / ${num(r.size)}</td><td>${num(r.dbRows)} / ${num(r.parseErrors)}</td><td>${esc(r.verification||'—')}<br>${fmt(r.verifiedUtc)}</td>
-    <td>${v3Button('verify',r.fileId,'Verify')}${canImport?v3Button('replay',r.fileId,'Replay'):''}${v3Button('generations',r.fileId,'Versions')}${canImport?v3Button('new-generation',r.fileId,'New version'):''}</td></tr>`;
+    <td>${v3Button('verify',r.fileId,'Verify')}${v3Button('generations',r.fileId,'Versions')}</td></tr>`;
   }).join('')||emptyRow(7);
 }
 $('source-search').addEventListener('input',renderSourceSettings);
@@ -198,15 +174,9 @@ $('sources-reload').addEventListener('click',async()=>{
 $('sources-enable-visible').addEventListener('click',()=>{visibleSourceRows().forEach(r=>stageSource(r.Id,true));renderSourceSettings();});
 $('sources-disable-visible').addEventListener('click',()=>{visibleSourceRows().forEach(r=>stageSource(r.Id,false));renderSourceSettings();});
 async function loadV3Tab(name) {
-  if(name==='access') {
-    // Own identity is available even before role authorization succeeds.
-    const r=await fetch('Reports.ashx?action=whoami',{credentials:'same-origin',cache:'no-store'});
-    const text=await r.text();let data;try{data=JSON.parse(text);}catch{data={httpStatus:r.status,message:'IIS returned non-JSON. Check authentication settings.'};}
-    $('access-info').textContent=JSON.stringify(data,null,2);return data;
-  }
   if(name==='agent') {
-    const [state,health]=await Promise.all([api('agent',null,{noSite:true}),api('health',null,{noSite:true})]);
-    $('agent-status').innerHTML=`<p><b>${health.agentOnline?'Online':'Offline / stale'}</b> | Heartbeat: ${esc(health.heartbeatAgeSeconds)} s | Pending jobs: ${num(health.queuedJobs)}</p><pre class="v3-pre"></pre>`;
+    const state=await api('runtime',null,{noSite:true});
+    $('agent-status').innerHTML='<p>Импорт запускается кнопкой или автообновлением активной вкладки.</p><pre class="v3-pre"></pre>';
     $('agent-status').querySelector('pre').textContent=JSON.stringify(state,null,2);return;
   }
   if(name==='checks') {
@@ -219,8 +189,7 @@ async function loadV3Tab(name) {
       (r.State==='open'?v3Button('ack',r.Id,'Acknowledge'):'')+(r.State==='resolved'?v3Button('close',r.Id,'Close'):'')+(r.Active?v3Button('cancel',r.Id,'Close manually'):'')):'')]]);return;
   }
   if(name==='queue') {
-    const [jobs,messages]=await Promise.all([api('jobs',null,{noSite:true}),api('notifications',null,{noSite:true})]);
-    v3Table('jobs-table',jobs,[['\u0422\u0438\u043f','Kind'],['\u0421\u0442\u0430\u0442\u0443\u0441','State'],['\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c','RequestedBy'],['\u041d\u0430\u0447\u0430\u043b\u043e UTC',r=>fmt(r.RequestedUtc)],['\u041f\u0440\u043e\u0433\u0440\u0435\u0441\u0441','ProgressOffset'],['\u0420\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442','Result']]);
+    const messages=await api('notifications',null,{noSite:true});
     v3Table('outbox-table',messages,[['Event ID','Id'],['\u0422\u0438\u043f','Kind'],['\u0421\u0442\u0430\u0442\u0443\u0441','State'],['\u041f\u043e\u043f\u044b\u0442\u043a\u0438','Attempts'],['HTTP','HttpStatus'],['\u041e\u0448\u0438\u0431\u043a\u0430','LastError'],['',r=>r.State==='failed'?v3Button('retry',r.Id,'Retry'):'']]);return;
   }
 }
@@ -228,21 +197,22 @@ document.addEventListener('click',async event=>{
   const el=event.target.closest('[data-v3-action]');if(!el)return;
   const action=el.dataset.v3Action,id=el.dataset.id;el.disabled=true;
   try {
-    if(action==='renew-csrf'){await renewToken();flash('CSRF token renewed');await loadV3Tab('access');}
+    if(action==='run-monitoring'){await api('monitor',null,{noSite:true,method:'POST'});flash('Проверка завершена');await loadAll();}
     else if(action==='new-check')editor('check',{enabled:true,expectedStatus:200,intervalSeconds:60,timeoutSeconds:10,maxLatencyMs:5000,failAfter:3,recoverAfter:2});
     else if(action==='new-rule')editor('rule',{enabled:true,metric:'5xx_percent',siteId:0,windowMinutes:5,threshold:5,minSamples:100,failAfter:2,recoverAfter:2});
     else if(action==='edit-check')editor('check',v3Cache.checks.find(x=>x.Id===id));
     else if(action==='edit-rule')editor('rule',v3Cache.rules.find(x=>x.Id===id));
-    else if(['verify','replay','new-generation'].includes(action)) {
-      const message=action==='new-generation'?'Create a NEW active file version? Old raw data stays archived and is excluded from current charts.':`Queue ${action} for file ${id}?`;
-      if(confirm(message)){await api('job-create',null,{noSite:true,method:'POST',body:{kind:action,fileId:Number(id)}});flash('Queued in Windows agent');}
+    else if(action==='verify') {
+      if(confirm('Проверить контрольные суммы файла? Для больших журналов это может занять время.')){
+        await api('file-verify',{fileId:Number(id)},{noSite:true,method:'POST'});flash('Проверка завершена');await loadSources();
+      }
     }
     else if(['ack','close','cancel'].includes(action)) {
       if(action!=='cancel'||confirm('Close manually without verified recovery? The rule may open another incident if the failure continues.')){
         await api('incident-action',null,{noSite:true,method:'POST',body:{id,action}});await loadV3Tab('incidents');
       }
     }
-    else if(action==='test-notification'){await api('notification-test',null,{noSite:true,method:'POST'});flash('Test queued, not yet delivered');await loadV3Tab('queue');}
+    else if(action==='test-notification'){await api('notification-test',null,{noSite:true,method:'POST'});flash('Тестовое сообщение сохранено. Нажмите «Выполнить» для отправки.');await loadV3Tab('queue');}
     else if(action==='retry'){await api('notification-retry',null,{noSite:true,method:'POST',body:{id}});await loadV3Tab('queue');}
     else if(action==='raw')detail('Raw event',await api('raw-event',{id},{noSite:true}));
     else if(action==='generations')detail('File generations',await api('generations',{fileId:id},{noSite:true}));
@@ -250,21 +220,25 @@ document.addEventListener('click',async event=>{
     else if(['check-results','incident-events'].includes(action))detail(action,await api(action,{id},{noSite:true}));
   }catch(error){showError(error);}finally{el.disabled=false;}
 });
-(async function startV3(){
-  try {
-    const own=await loadV3Tab('access');accessInfo=own;applyAccess();
-    if(!own.canRead){switchTab('access');throw new Error(`Windows / access: ${own.denialCode||'authentication_required'}. See tools/Enable-WindowsAuth.ps1; use the identity shown in whoami.`);}
-    await loadAccess();await loadSites();
-    const initialTab=new URLSearchParams(location.hash.slice(1)).get('tab')||'overview';readStateFromHash();
-    await loadAll();switchTab(initialTab);await loadHealth();
-  }catch(error){showError(error);}
-  setInterval(async()=>{
-    if(!accessInfo.canRead||refreshing||document.hidden)return;
-    try {
-      await loadHealth();const active=document.querySelector('#tabs button.active')?.dataset.tab;
-      if(active==='overview'){await loadSites();await loadOverview();}
-      else if(active==='sources'&&!sourceSettings.busy&&!sourceSettings.draft.size)await loadSources();
-      else if(['agent','incidents','queue'].includes(active))await loadV3Tab(active);
-    }catch(error){showError(error);}
+let autoTimer;
+try {$('auto-refresh').checked=localStorage.getItem('iisreports-simple-auto')!=='false';}catch{}
+function scheduleNext() {
+  clearTimeout(autoTimer);
+  autoTimer=setTimeout(async()=>{
+    try {if($('auto-refresh').checked&&!document.hidden&&!refreshing)await refresh();}
+    finally{scheduleNext();}
   },30000);
+}
+$('auto-refresh').addEventListener('change',()=>{
+  try{localStorage.setItem('iisreports-simple-auto',String($('auto-refresh').checked));}catch{}
+});
+(async function startSimple(){
+  applyAccess();
+  try {
+    await loadSites();
+    const initialTab=new URLSearchParams(location.hash.slice(1)).get('tab')||'overview';
+    readStateFromHash();switchTab(initialTab);
+    await refresh();
+  }catch(error){showError(error);}
+  scheduleNext();
 })();
